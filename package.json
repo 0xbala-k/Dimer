@@ -9,9 +9,6 @@
     "web": "expo start --web",
     "test": "jest --watchAll"
   },
-  "jest": {
-    "preset": "jest-expo"
-  },
   "dependencies": {
     "@expo-google-fonts/dm-mono": "^0.4.2",
     "@expo-google-fonts/dm-sans": "^0.4.2",
