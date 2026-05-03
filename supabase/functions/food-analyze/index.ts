@@ -4,6 +4,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
 const CLAUDE_SYSTEM = `You are a nutrition analysis assistant. Return ONLY valid JSON, no markdown.
@@ -33,6 +34,12 @@ serve(async (req) => {
 
   try {
     const { mode, data } = await req.json() as { mode: 'photo' | 'text' | 'barcode', data: string }
+    if (!['photo', 'text', 'barcode'].includes(mode) || typeof data !== 'string') {
+      return new Response(JSON.stringify({ error: 'invalid_input' }), {
+        status: 400,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+      })
+    }
     const calaiKey = Deno.env.get('CALAI_API_KEY') ?? ''
     const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY') ?? ''
 
@@ -122,7 +129,14 @@ serve(async (req) => {
         }),
       })
       const retryJson = await retry.json()
-      parsed = JSON.parse(retryJson.content?.[0]?.text ?? '{}')
+      try {
+        parsed = JSON.parse(retryJson.content?.[0]?.text ?? '{}')
+      } catch {
+        return new Response(JSON.stringify({ error: 'parse_failed' }), {
+          status: 422,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+        })
+      }
     }
 
     if (parsed.error) {
