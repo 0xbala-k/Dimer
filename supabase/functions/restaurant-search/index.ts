@@ -12,9 +12,28 @@ serve(async (req) => {
 
   try {
     const { query, id } = await req.json() as { query?: string; id?: number }
-    const key = Deno.env.get('SPOONACULAR_API_KEY') ?? ''
+    const key = Deno.env.get('SPOONACULAR_API_KEY')
+    if (!key) {
+      return new Response(JSON.stringify({ error: 'server_misconfiguration' }), {
+        status: 500,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+      })
+    }
 
     if (typeof query === 'undefined' && typeof id === 'undefined') {
+      return new Response(JSON.stringify({ error: 'invalid_input' }), {
+        status: 400,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (id !== undefined && (typeof id !== 'number' || !Number.isInteger(id) || id <= 0)) {
+      return new Response(JSON.stringify({ error: 'invalid_input' }), {
+        status: 400,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+      })
+    }
+    if (query !== undefined && typeof query !== 'string') {
       return new Response(JSON.stringify({ error: 'invalid_input' }), {
         status: 400,
         headers: { ...CORS, 'Content-Type': 'application/json' },
@@ -26,9 +45,15 @@ serve(async (req) => {
       const res = await fetch(
         `https://api.spoonacular.com/food/menuItems/${id}?apiKey=${key}`
       )
-      if (res.status === 402) {
-        return new Response(JSON.stringify({ error: 'quota_exceeded' }), {
-          status: 402,
+      if (!res.ok) {
+        if (res.status === 402) {
+          return new Response(JSON.stringify({ error: 'quota_exceeded' }), {
+            status: 402,
+            headers: { ...CORS, 'Content-Type': 'application/json' },
+          })
+        }
+        return new Response(JSON.stringify({ error: 'upstream_error' }), {
+          status: 502,
           headers: { ...CORS, 'Content-Type': 'application/json' },
         })
       }
@@ -50,9 +75,15 @@ serve(async (req) => {
     const res = await fetch(
       `https://api.spoonacular.com/food/menuItems/search?query=${encodeURIComponent(query ?? '')}&number=10&apiKey=${key}`
     )
-    if (res.status === 402) {
-      return new Response(JSON.stringify({ error: 'quota_exceeded' }), {
-        status: 402,
+    if (!res.ok) {
+      if (res.status === 402) {
+        return new Response(JSON.stringify({ error: 'quota_exceeded' }), {
+          status: 402,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify({ error: 'upstream_error' }), {
+        status: 502,
         headers: { ...CORS, 'Content-Type': 'application/json' },
       })
     }
@@ -77,7 +108,8 @@ serve(async (req) => {
       headers: { ...CORS, 'Content-Type': 'application/json' },
     })
   } catch (err) {
-    return new Response(JSON.stringify({ error: String(err) }), {
+    console.error('restaurant-search error:', err)
+    return new Response(JSON.stringify({ error: 'internal_error' }), {
       status: 500,
       headers: { ...CORS, 'Content-Type': 'application/json' },
     })
