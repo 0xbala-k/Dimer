@@ -71,6 +71,7 @@ export async function getValidAccessToken(): Promise<string | null> {
     })
     if (!res.ok) return null
     const data = await res.json()
+    if (!data?.access_token) return null
     await saveWhoopTokens(data)
     return data.access_token
   } catch {

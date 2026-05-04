@@ -42,12 +42,6 @@ export async function fetchByBarcode(barcode: string): Promise<FoodResult | null
     carbs = Math.round((n.carbohydrates_100g ?? 0) * ratio * 10) / 10
     fats = Math.round((n.fat_100g ?? 0) * ratio * 10) / 10
     fiber = Math.round((n.fiber_100g ?? 0) * ratio * 10) / 10
-  } else if (n['energy-kcal_serving'] !== undefined) {
-    calories = Math.round(n['energy-kcal_serving'])
-    protein = Math.round((n.proteins_100g ?? 0) * 10) / 10
-    carbs = Math.round((n.carbohydrates_100g ?? 0) * 10) / 10
-    fats = Math.round((n.fat_100g ?? 0) * 10) / 10
-    fiber = Math.round((n.fiber_100g ?? 0) * 10) / 10
   } else {
     calories = Math.round(n['energy-kcal_100g'] ?? 0)
     protein = n.proteins_100g ?? 0
