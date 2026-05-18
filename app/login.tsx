@@ -26,21 +26,26 @@ export default function LoginScreen() {
   async function handleConnect() {
     const result = await promptAsync()
     if (result.type !== 'success') return
-    const tokenRes = await fetch(discovery.tokenEndpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        client_id: CLIENT_ID,
-        code: result.params.code,
-        redirect_uri: redirectUri,
-        code_verifier: request!.codeVerifier!,
-      }).toString(),
-    })
-    if (!tokenRes.ok) return
-    const tokens = await tokenRes.json()
-    await saveWhoopTokens(tokens)
-    router.replace('/(tabs)/dashboard')
+    try {
+      const tokenRes = await fetch(discovery.tokenEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          client_id: CLIENT_ID,
+          code: result.params.code,
+          redirect_uri: redirectUri,
+          code_verifier: request!.codeVerifier!,
+        }).toString(),
+      })
+      if (!tokenRes.ok) return
+      const tokens = await tokenRes.json()
+      if (!tokens?.access_token || !tokens?.refresh_token) return
+      await saveWhoopTokens(tokens)
+      router.replace('/(tabs)/dashboard')
+    } catch {
+      // network or parse error — stay on login screen
+    }
   }
 
   return (

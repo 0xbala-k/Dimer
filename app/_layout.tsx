@@ -21,7 +21,6 @@ SplashScreen.preventAutoHideAsync()
 
 export default function RootLayout() {
   const [authChecked, setAuthChecked] = useState(false)
-  const [hasToken, setHasToken] = useState(false)
 
   const [fontsLoaded] = useFonts({
     Syne_800ExtraBold,
@@ -35,8 +34,7 @@ export default function RootLayout() {
   })
 
   useEffect(() => {
-    getValidAccessToken().then((token) => {
-      setHasToken(!!token)
+    getValidAccessToken().then(() => {
       setAuthChecked(true)
     })
   }, [])

@@ -45,7 +45,9 @@ export async function clearWhoopTokens() {
   ])
 }
 
-export async function getValidAccessToken(): Promise<string | null> {
+let _authCheckPromise: Promise<string | null> | null = null
+
+async function _getValidAccessToken(): Promise<string | null> {
   const [token, refreshToken, expiresAtStr] = await Promise.all([
     SecureStore.getItemAsync(KEYS.accessToken),
     SecureStore.getItemAsync(KEYS.refreshToken),
@@ -77,6 +79,15 @@ export async function getValidAccessToken(): Promise<string | null> {
   } catch {
     return null
   }
+}
+
+export function getValidAccessToken(): Promise<string | null> {
+  if (!_authCheckPromise) {
+    _authCheckPromise = _getValidAccessToken().finally(() => {
+      _authCheckPromise = null
+    })
+  }
+  return _authCheckPromise
 }
 
 async function whoopFetch(path: string): Promise<Response> {
