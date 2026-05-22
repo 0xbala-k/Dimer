@@ -1,71 +1,69 @@
+import { useRef, useCallback } from 'react'
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import type BottomSheet from '@gorhom/bottom-sheet'
 import { DeficitRing } from '../../../components/DeficitRing'
 import { MacroBar } from '../../../components/MacroBar'
 import { WhoopBadge } from '../../../components/WhoopBadge'
 import { GlassCard } from '../../../components/GlassCard'
+import { AddFoodSheet } from '../../../components/AddFoodSheet'
+import { useWhoopData } from '../../../hooks/useWhoopData'
+import { useFoodLog } from '../../../hooks/useFoodLog'
+import { useDeficit } from '../../../hooks/useDeficit'
+import type { FoodLog } from '../../../lib/types'
 import { colors, fonts, spacing } from '../../../lib/theme'
 
-const HARDCODED = {
-  burned: 2340,
-  consumed: 1853,
-  strain: 14.2,
-  recovery: 82,
-  macros: { protein: 142, carbs: 198, fats: 61, fiber: 18 },
-  logs: [
-    { id: '1', name: 'Grilled Chicken Breast', calories: 265, protein: 42, carbs: 0, fats: 7, fiber: 0 },
-    { id: '2', name: 'Oatmeal + Banana', calories: 310, protein: 8, carbs: 64, fats: 4, fiber: 6 },
-    { id: '3', name: 'Chipotle Burrito Bowl', calories: 740, protein: 52, carbs: 82, fats: 24, fiber: 12 },
-  ],
-}
-
-const MACRO_TARGETS = { protein: 200, carbs: 250, fats: 80, fiber: 30 }
-
 export default function DashboardScreen() {
+  const sheetRef = useRef<BottomSheet>(null)
+  const { data: whoopData, loading: whoopLoading } = useWhoopData()
+  const { logs, totalCalories } = useFoodLog()
+  const deficit = useDeficit(whoopData?.burned ?? 0, logs)
+
+  const burned = whoopData?.burned ?? 0
+  const consumed = totalCalories
+
+  const openSheet = useCallback(() => sheetRef.current?.expand(), [])
+
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       <ScrollView style={s.scroll} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
-        {/* Header */}
         <View style={s.header}>
           <View>
             <Text style={s.day}>{new Date().toLocaleDateString('en-US', { weekday: 'long' })}</Text>
             <Text style={s.date}>{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase()}</Text>
           </View>
-          <WhoopBadge strain={HARDCODED.strain} recovery={HARDCODED.recovery} />
+          <WhoopBadge strain={whoopData?.strain ?? null} recovery={whoopData?.recovery ?? null} />
         </View>
 
-        {/* Ring */}
         <View style={s.ringWrap}>
-          <DeficitRing burned={HARDCODED.burned} consumed={HARDCODED.consumed} />
+          <DeficitRing burned={burned} consumed={consumed} />
           <View style={s.burnConsumed}>
             <View style={s.bcItem}>
               <Text style={s.bcLabel}>BURNED</Text>
-              <Text style={s.bcValue}>{HARDCODED.burned.toLocaleString()}</Text>
+              <Text style={s.bcValue}>{burned.toLocaleString()}</Text>
             </View>
             <View style={s.divider} />
             <View style={s.bcItem}>
               <Text style={s.bcLabel}>EATEN</Text>
-              <Text style={s.bcValue}>{HARDCODED.consumed.toLocaleString()}</Text>
+              <Text style={s.bcValue}>{consumed.toLocaleString()}</Text>
             </View>
           </View>
         </View>
 
-        {/* Macros */}
         <GlassCard style={{ marginHorizontal: spacing.lg, marginBottom: spacing.md, gap: 8 }}>
           <Text style={s.sectionTitle}>MACROS</Text>
-          <MacroBar label="Protein" grams={HARDCODED.macros.protein} maxGrams={MACRO_TARGETS.protein} color={colors.protein} />
-          <MacroBar label="Carbs" grams={HARDCODED.macros.carbs} maxGrams={MACRO_TARGETS.carbs} color={colors.carbs} />
-          <MacroBar label="Fat" grams={HARDCODED.macros.fats} maxGrams={MACRO_TARGETS.fats} color={colors.fat} />
-          <MacroBar label="Fiber" grams={HARDCODED.macros.fiber} maxGrams={MACRO_TARGETS.fiber} color={colors.fiber} />
+          <MacroBar label="Protein" grams={deficit.macroTotals.protein} maxGrams={200} color={colors.protein} />
+          <MacroBar label="Carbs"   grams={deficit.macroTotals.carbs}   maxGrams={250} color={colors.carbs} />
+          <MacroBar label="Fat"     grams={deficit.macroTotals.fats}    maxGrams={80}  color={colors.fat} />
+          <MacroBar label="Fiber"   grams={deficit.macroTotals.fiber}   maxGrams={30}  color={colors.fiber} />
         </GlassCard>
 
-        {/* Food log */}
         <View style={s.logHeader}>
           <Text style={s.sectionTitle}>TODAY'S LOG</Text>
-          <Text style={s.logTotal}>{HARDCODED.consumed.toLocaleString()} kcal</Text>
+          <Text style={s.logTotal}>{consumed.toLocaleString()} kcal</Text>
         </View>
 
-        {HARDCODED.logs.map((log) => (
+        {logs.map((log: FoodLog) => (
           <GlassCard key={log.id} style={s.logItem}>
             <View style={s.logItemInner}>
               <View style={[s.logIcon, { backgroundColor: `${colors.primary}15` }]}>
@@ -80,17 +78,26 @@ export default function DashboardScreen() {
           </GlassCard>
         ))}
 
+        {logs.length === 0 && !whoopLoading && (
+          <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+            <Text style={{ fontFamily: fonts.label, color: colors.textDim, fontSize: 13 }}>
+              No food logged yet. Tap + to add.
+            </Text>
+          </View>
+        )}
+
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* FAB */}
       <Pressable
         style={({ pressed }) => [s.fab, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
-        onPress={() => {}}
+        onPress={openSheet}
         accessibilityLabel="Add food"
       >
         <Text style={s.fabIcon}>+</Text>
       </Pressable>
+
+      <AddFoodSheet ref={sheetRef} />
     </SafeAreaView>
   )
 }

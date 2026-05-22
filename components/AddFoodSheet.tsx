@@ -7,6 +7,7 @@ import { TextFoodInput } from './TextFoodInput'
 import { RestaurantSearch } from './RestaurantSearch'
 import { BarcodeInput } from './BarcodeInput'
 import type { FoodResult } from '../lib/types'
+import { ConfirmFoodCard } from './ConfirmFoodCard'
 
 type Tab = 'photo' | 'text' | 'restaurant' | 'barcode'
 
@@ -47,27 +48,38 @@ export const AddFoodSheet = forwardRef<BottomSheet>((_, ref) => {
       <BottomSheetScrollView contentContainerStyle={s.container} keyboardShouldPersistTaps="handled">
         <Text style={s.title}>Log Food</Text>
 
-        {/* Tab bar */}
-        <View style={s.tabBar}>
-          {TABS.map((tab) => (
-            <Pressable
-              key={tab.id}
-              style={[s.tab, activeTab === tab.id && s.tabActive]}
-              onPress={() => setActiveTab(tab.id)}
-              accessibilityLabel={tab.label}
-            >
-              <Text style={[s.tabText, activeTab === tab.id && s.tabTextActive]}>
-                {tab.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+        {pendingResult ? (
+          <ConfirmFoodCard
+            result={pendingResult}
+            inputMethod={activeTab}
+            onSaved={handleSaved}
+            onRetake={() => setPendingResult(null)}
+          />
+        ) : (
+          <>
+            {/* Tab bar */}
+            <View style={s.tabBar}>
+              {TABS.map((tab) => (
+                <Pressable
+                  key={tab.id}
+                  style={[s.tab, activeTab === tab.id && s.tabActive]}
+                  onPress={() => setActiveTab(tab.id)}
+                  accessibilityLabel={tab.label}
+                >
+                  <Text style={[s.tabText, activeTab === tab.id && s.tabTextActive]}>
+                    {tab.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
 
-        {/* Tab content */}
-        {activeTab === 'photo' && <PhotoInput onResult={handleResult} />}
-        {activeTab === 'text' && <TextFoodInput onResult={handleResult} />}
-        {activeTab === 'restaurant' && <RestaurantSearch onResult={handleResult} />}
-        {activeTab === 'barcode' && <BarcodeInput onResult={handleResult} />}
+            {/* Tab content */}
+            {activeTab === 'photo' && <PhotoInput onResult={handleResult} />}
+            {activeTab === 'text' && <TextFoodInput onResult={handleResult} />}
+            {activeTab === 'restaurant' && <RestaurantSearch onResult={handleResult} />}
+            {activeTab === 'barcode' && <BarcodeInput onResult={handleResult} />}
+          </>
+        )}
       </BottomSheetScrollView>
     </BottomSheet>
   )
