@@ -5,13 +5,15 @@ import * as AuthSession from 'expo-auth-session'
 import * as WebBrowser from 'expo-web-browser'
 import Svg, { Circle, Path, Defs, LinearGradient, Stop } from 'react-native-svg'
 import { colors, fonts } from '../lib/theme'
-import { WHOOP_SCOPES, makeWhoopRedirectUri, getWhoopDiscovery, saveWhoopTokens } from '../lib/whoop'
+import { DISCOVERY, saveWhoopTokens } from '../lib/whoop'
 
 const CLIENT_ID = process.env.EXPO_PUBLIC_WHOOP_CLIENT_ID!
+const CLIENT_SECRET = process.env.EXPO_PUBLIC_WHOOP_CLIENT_SECRET!
+const WHOOP_SCOPES = ['offline', 'read:cycles', 'read:body_measurement']
 
 export default function LoginScreen() {
-  const redirectUri = makeWhoopRedirectUri()
-  const discovery = getWhoopDiscovery()
+  const redirectUri = AuthSession.makeRedirectUri({ scheme: 'dimer', path: 'auth/callback' })
+  const discovery = DISCOVERY
 
   const [request, , promptAsync] = AuthSession.useAuthRequest(
     {
@@ -24,7 +26,10 @@ export default function LoginScreen() {
   )
 
   async function handleConnect() {
+    console.log('[Whoop] redirect_uri:', redirectUri)
+    console.log('[Whoop] request ready:', !!request)
     const result = await promptAsync()
+    console.log('[Whoop] promptAsync result:', JSON.stringify(result))
     if (result.type !== 'success') return
     try {
       const tokenRes = await fetch(discovery.tokenEndpoint, {
@@ -33,18 +38,21 @@ export default function LoginScreen() {
         body: new URLSearchParams({
           grant_type: 'authorization_code',
           client_id: CLIENT_ID,
+          client_secret: CLIENT_SECRET,
           code: result.params.code,
           redirect_uri: redirectUri,
           code_verifier: request!.codeVerifier!,
         }).toString(),
       })
+      const tokenBody = await tokenRes.text()
+      console.log('[Whoop] token status:', tokenRes.status, tokenBody)
       if (!tokenRes.ok) return
-      const tokens = await tokenRes.json()
+      const tokens = JSON.parse(tokenBody)
       if (!tokens?.access_token || !tokens?.refresh_token) return
       await saveWhoopTokens(tokens)
-      router.replace('/(tabs)/dashboard')
-    } catch {
-      // network or parse error — stay on login screen
+      router.replace('/dashboard')
+    } catch (e) {
+      console.log('[Whoop] token exchange error:', e)
     }
   }
 

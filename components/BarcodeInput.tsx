@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { View, Text, Pressable, ActivityIndicator, Alert, StyleSheet } from 'react-native'
-import { BarCodeScanner, BarCodeScannerResult } from 'expo-barcode-scanner'
+import { CameraView, useCameraPermissions } from 'expo-camera'
 import { fetchByBarcode } from '../lib/openfoodfacts'
 import { colors, fonts, radii } from '../lib/theme'
 import type { FoodResult } from '../lib/types'
@@ -10,25 +10,27 @@ interface Props {
 }
 
 export function BarcodeInput({ onResult }: Props) {
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null)
+  const [permission, requestPermission] = useCameraPermissions()
   const [scanned, setScanned] = useState(false)
   const [loading, setLoading] = useState(false)
   const [scanning, setScanning] = useState(false)
 
-  async function requestPermission() {
-    const { status } = await BarCodeScanner.requestPermissionsAsync()
-    setHasPermission(status === 'granted')
-    if (status === 'granted') setScanning(true)
+  async function handleOpen() {
+    if (!permission?.granted) {
+      const result = await requestPermission()
+      if (!result.granted) return
+    }
+    setScanning(true)
   }
 
-  async function handleScan({ data }: BarCodeScannerResult) {
+  async function handleScan({ data }: { data: string }) {
     if (scanned || loading) return
     setScanned(true)
     setLoading(true)
     try {
       const result = await fetchByBarcode(data)
       if (!result) {
-        Alert.alert('Product not found', 'This barcode isn\'t in Open Food Facts. Try text entry instead.', [
+        Alert.alert('Product not found', "This barcode isn't in Open Food Facts. Try text entry instead.", [
           { text: 'OK', onPress: () => { setScanned(false); setLoading(false) } },
         ])
         return
@@ -46,10 +48,10 @@ export function BarcodeInput({ onResult }: Props) {
     return (
       <View style={s.container}>
         <Text style={s.hint}>Scan a product barcode to get nutrition data from Open Food Facts (free, no API key).</Text>
-        <Pressable style={({ pressed }) => [s.btn, pressed && { opacity: 0.85 }]} onPress={requestPermission}>
+        <Pressable style={({ pressed }) => [s.btn, pressed && { opacity: 0.85 }]} onPress={handleOpen}>
           <Text style={s.btnText}>Open Scanner →</Text>
         </Pressable>
-        {hasPermission === false && (
+        {permission?.granted === false && (
           <Text style={s.warning}>Camera permission denied. Enable it in Settings → Dimer.</Text>
         )}
       </View>
@@ -58,7 +60,12 @@ export function BarcodeInput({ onResult }: Props) {
 
   return (
     <View style={s.scannerWrap}>
-      <BarCodeScanner onBarCodeScanned={handleScan} style={StyleSheet.absoluteFillObject} />
+      <CameraView
+        style={StyleSheet.absoluteFillObject}
+        facing="back"
+        barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'qr'] }}
+        onBarcodeScanned={scanned ? undefined : handleScan}
+      />
       {loading && (
         <View style={s.overlay}>
           <ActivityIndicator color={colors.primary} size="large" />
@@ -66,7 +73,7 @@ export function BarcodeInput({ onResult }: Props) {
         </View>
       )}
       <View style={s.frame} />
-      <Pressable style={s.cancelBtn} onPress={() => setScanning(false)}>
+      <Pressable style={s.cancelBtn} onPress={() => { setScanning(false); setScanned(false) }}>
         <Text style={s.cancelText}>Cancel</Text>
       </Pressable>
     </View>

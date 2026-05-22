@@ -1,21 +1,10 @@
 import * as SecureStore from 'expo-secure-store'
-import * as AuthSession from 'expo-auth-session'
 import type { WhoopData } from './types'
 
 const WHOOP_CLIENT_ID = process.env.EXPO_PUBLIC_WHOOP_CLIENT_ID!
-const DISCOVERY = {
+export const DISCOVERY = {
   authorizationEndpoint: 'https://api.prod.whoop.com/oauth/oauth2/auth',
   tokenEndpoint: 'https://api.prod.whoop.com/oauth/oauth2/token',
-}
-
-export const WHOOP_SCOPES = ['offline', 'read:recovery', 'read:cycles', 'read:workout', 'read:sleep', 'read:profile']
-
-export function makeWhoopRedirectUri() {
-  return AuthSession.makeRedirectUri({ scheme: 'dimer', path: 'auth/callback' })
-}
-
-export function getWhoopDiscovery() {
-  return DISCOVERY
 }
 
 const KEYS = {
@@ -107,14 +96,13 @@ export async function fetchTodayWhoopData(): Promise<WhoopData> {
   if (!res.ok) throw new Error(`Whoop API error: ${res.status}`)
   const data = await res.json()
 
-  const cycles: { score?: { kilojoule?: number; strain?: number; recovery_score?: number } }[] = data.records ?? []
+  const cycles: { score?: { kilojoule?: number; strain?: number } }[] = data.records ?? []
 
   const totalKj = cycles.reduce((sum, c) => sum + (c.score?.kilojoule ?? 0), 0)
   const burned = Math.round(totalKj / 4.184)
 
   const latest = cycles[cycles.length - 1]
   const strain = latest?.score?.strain ?? null
-  const recovery = latest?.score?.recovery_score ?? null
 
-  return { burned, strain, recovery }
+  return { burned, strain, recovery: null }
 }

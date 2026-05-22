@@ -5,11 +5,11 @@ import { getValidAccessToken } from '../lib/whoop'
 import { colors } from '../lib/theme'
 
 export default function Index() {
-  const [dest, setDest] = useState<'/(tabs)/dashboard' | '/login' | null>(null)
+  const [dest, setDest] = useState<'/dashboard' | '/login' | null>(null)
 
   useEffect(() => {
     getValidAccessToken().then((token) => {
-      setDest(token ? '/(tabs)/dashboard' : '/login')
+      setDest(token ? '/dashboard' : '/login')
     })
   }, [])
 

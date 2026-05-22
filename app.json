@@ -7,7 +7,11 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "splash": { "image": "./assets/splash.png", "resizeMode": "contain", "backgroundColor": "#070B14" },
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#070B14"
+    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.0xmuralik.dimer",
@@ -18,10 +22,17 @@
     },
     "plugins": [
       "expo-router",
-      ["expo-camera", { "cameraPermission": "Allow Dimer to access your camera." }],
-      ["expo-barcode-scanner", { "cameraPermission": "Allow Dimer to access your camera for barcode scanning." }],
-      "react-native-reanimated/plugin"
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Dimer to access your camera."
+        }
+      ],
+      "expo-asset"
     ],
-    "experiments": { "typedRoutes": true }
+    "newArchEnabled": true,
+    "experiments": {
+      "typedRoutes": true
+    }
   }
 }
