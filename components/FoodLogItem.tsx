@@ -43,7 +43,7 @@ export function FoodLogItem({ log, onDelete }: Props) {
   }
 
   const accentColor = SOURCE_COLORS[log.source]
-  const time = new Date(log.logged_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+  const time = new Date(log.logged_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
 
   return (
     <Swipeable ref={swipeRef} renderRightActions={renderRightActions} overshootRight={false}>
