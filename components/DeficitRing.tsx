@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet } from 'react-native'
-import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg'
+import Svg, { Circle } from 'react-native-svg'
 import Animated, { useSharedValue, useAnimatedProps, withTiming, Easing } from 'react-native-reanimated'
 import { useEffect } from 'react'
 import { colors, fonts } from '../lib/theme'
@@ -37,11 +37,12 @@ export function DeficitRing({ burned, consumed }: Props) {
   const isNearLimit = pct >= 0.9 && pct < 1.0
   const isSurplus = pct >= 1.0
 
+  // react-native-svg doesn't support url(#id) gradient strokes on native; use solid color
   const ringStroke = isSurplus
     ? colors.ringSurplus
     : isNearLimit
     ? colors.ringAmber
-    : 'url(#ice-grad)'
+    : colors.ring.from
 
   const valueColor = isSurplus ? colors.ringSurplus : isNearLimit ? colors.ringAmber : colors.primary
 
@@ -53,12 +54,6 @@ export function DeficitRing({ burned, consumed }: Props) {
         viewBox={`0 0 ${SIZE} ${SIZE}`}
         style={{ transform: [{ rotate: '-90deg' }] }}
       >
-        <Defs>
-          <LinearGradient id="ice-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <Stop offset="0%" stopColor={colors.ring.from} />
-            <Stop offset="100%" stopColor={colors.ring.to} />
-          </LinearGradient>
-        </Defs>
         {/* Track */}
         <Circle
           cx={SIZE / 2} cy={SIZE / 2} r={RADIUS}

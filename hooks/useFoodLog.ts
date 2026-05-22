@@ -11,6 +11,7 @@ export function useFoodLog() {
   const [loading, setLoading] = useState(true)
 
   const fetchLogs = useCallback(async () => {
+    setLoading(true)
     const { data, error } = await supabase
       .from('food_logs')
       .select('*')
@@ -41,8 +42,8 @@ export function useFoodLog() {
   const totalCalories = logs.reduce((sum, l) => sum + l.calories, 0)
 
   async function deleteLog(id: string) {
-    await supabase.from('food_logs').delete().eq('id', id)
     setLogs(prev => prev.filter(l => l.id !== id))
+    await supabase.from('food_logs').delete().eq('id', id)
   }
 
   return { logs, loading, totalCalories, refetch: fetchLogs, deleteLog }
