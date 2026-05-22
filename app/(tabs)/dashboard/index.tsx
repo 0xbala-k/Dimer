@@ -1,4 +1,5 @@
 import { useRef, useCallback } from 'react'
+import * as Haptics from 'expo-haptics'
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import type BottomSheet from '@gorhom/bottom-sheet'
@@ -91,7 +92,10 @@ export default function DashboardScreen() {
 
       <Pressable
         style={({ pressed }) => [s.fab, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
-        onPress={openSheet}
+        onPress={async () => {
+          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+          openSheet()
+        }}
         accessibilityLabel="Add food"
       >
         <Text style={s.fabIcon}>+</Text>

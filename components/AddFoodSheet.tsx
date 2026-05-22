@@ -1,5 +1,6 @@
 import React, { forwardRef, useState, useCallback } from 'react'
 import { View, Text, Pressable, StyleSheet } from 'react-native'
+import * as Haptics from 'expo-haptics'
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet'
 import { colors, fonts, radii } from '../lib/theme'
 import { PhotoInput } from './PhotoInput'
@@ -63,7 +64,10 @@ export const AddFoodSheet = forwardRef<BottomSheet>((_, ref) => {
                 <Pressable
                   key={tab.id}
                   style={[s.tab, activeTab === tab.id && s.tabActive]}
-                  onPress={() => setActiveTab(tab.id)}
+                  onPress={async () => {
+                    await Haptics.selectionAsync()
+                    setActiveTab(tab.id)
+                  }}
                   accessibilityLabel={tab.label}
                 >
                   <Text style={[s.tabText, activeTab === tab.id && s.tabTextActive]}>
