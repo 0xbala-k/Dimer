@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "Dimer",
+    "slug": "dimer",
+    "scheme": "dimer",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#070B14"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.0xmuralik.dimer",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Used to scan food photos for calorie tracking",
+        "NSPhotoLibraryUsageDescription": "Used to select food photos from your library"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Dimer to access your camera."
+        }
+      ],
+      "expo-asset"
+    ],
+    "newArchEnabled": true,
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
