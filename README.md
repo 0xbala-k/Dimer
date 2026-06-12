@@ -70,7 +70,7 @@ supabase functions deploy restaurant-search
 Set secrets on the edge functions:
 
 ```bash
-supabase secrets set CAL_AI_API_KEY=<key>
+supabase secrets set ANTHROPIC_API_KEY=<key>
 supabase secrets set SPOONACULAR_API_KEY=<key>
 ```
 
