@@ -15,7 +15,7 @@ export interface FoodResult {
   fats: number
   fiber: number
   ingredients: Ingredient[]
-  source: 'calai' | 'claude' | 'openfoodfacts' | 'spoonacular'
+  source: 'claude' | 'openfoodfacts' | 'spoonacular'
   confidence?: 'high' | 'medium' | 'low'
   notes?: string
 }

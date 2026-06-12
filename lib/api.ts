@@ -2,7 +2,7 @@ import { supabase } from './supabase'
 import type { FoodResult, RestaurantResult } from './types'
 
 export async function analyzeFood(params: {
-  mode: 'photo' | 'text' | 'barcode'
+  mode: 'photo' | 'text'
   data: string
 }): Promise<FoodResult> {
   const { data, error } = await supabase.functions.invoke('food-analyze', {

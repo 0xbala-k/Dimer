@@ -7,7 +7,7 @@ const CORS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-const CLAUDE_SYSTEM = `You are a nutrition analysis assistant. Return ONLY valid JSON, no markdown.
+const SYSTEM = `You are a nutrition analysis assistant. Return ONLY valid JSON, no markdown.
 
 Schema:
 {
@@ -33,58 +33,16 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
-    const { mode, data } = await req.json() as { mode: 'photo' | 'text' | 'barcode', data: string }
-    if (!['photo', 'text', 'barcode'].includes(mode) || typeof data !== 'string') {
+    const { mode, data } = await req.json() as { mode: 'photo' | 'text', data: string }
+    if (!['photo', 'text'].includes(mode) || typeof data !== 'string') {
       return new Response(JSON.stringify({ error: 'invalid_input' }), {
         status: 400,
         headers: { ...CORS, 'Content-Type': 'application/json' },
       })
     }
-    const calaiKey = Deno.env.get('CALAI_API_KEY') ?? ''
+
     const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY') ?? ''
 
-    // 1. Try Cal AI
-    const endpoint = mode === 'photo'
-      ? 'https://api.calai.app/v4/scanImage'
-      : mode === 'text'
-      ? 'https://api.calai.app/v4/describeMeal'
-      : 'https://api.calai.app/v4/scanBarcode'
-
-    const body = mode === 'photo' ? { data: { imageData: data } }
-      : mode === 'text' ? { data: { text: data } }
-      : { data: { barcodeData: data } }
-
-    const calRes = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${calaiKey}` },
-      body: JSON.stringify(body),
-    })
-    const calJson = await calRes.json()
-
-    if (calJson.success && calJson.data) {
-      const d = calJson.data
-      return new Response(JSON.stringify({
-        name: d.name ?? 'Unknown',
-        calories: d.calories ?? 0,
-        protein: d.protein ?? 0,
-        carbs: d.carbs ?? 0,
-        fats: d.fats ?? d.fat ?? 0,
-        fiber: d.fiber ?? 0,
-        ingredients: d.ingredients ?? [],
-        source: 'calai',
-        confidence: 'high',
-      }), { headers: { ...CORS, 'Content-Type': 'application/json' } })
-    }
-
-    // 2. Barcode: no Claude fallback
-    if (mode === 'barcode') {
-      return new Response(JSON.stringify({ error: 'not_found' }), {
-        status: 404,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      })
-    }
-
-    // 3. Claude fallback (photo + text)
     const messages = mode === 'photo'
       ? [{ role: 'user', content: [
           { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data } },
@@ -102,7 +60,7 @@ serve(async (req) => {
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 512,
-        system: CLAUDE_SYSTEM,
+        system: SYSTEM,
         messages,
       }),
     })
@@ -113,7 +71,7 @@ serve(async (req) => {
     try {
       parsed = JSON.parse(text)
     } catch {
-      // retry with stricter prompt
+      // retry with prefilled assistant turn to force JSON output
       const retry = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -124,13 +82,13 @@ serve(async (req) => {
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
           max_tokens: 512,
-          system: CLAUDE_SYSTEM,
-          messages: [...messages, { role: 'assistant', content: 'Here is the JSON:' }],
+          system: SYSTEM,
+          messages: [...messages, { role: 'assistant', content: '{' }],
         }),
       })
       const retryJson = await retry.json()
       try {
-        parsed = JSON.parse(retryJson.content?.[0]?.text ?? '{}')
+        parsed = JSON.parse('{' + (retryJson.content?.[0]?.text ?? ''))
       } catch {
         return new Response(JSON.stringify({ error: 'parse_failed' }), {
           status: 422,
