@@ -7,6 +7,7 @@ jest.mock('expo-haptics', () => ({
   notificationAsync: jest.fn(), NotificationFeedbackType: { Success: 'SUCCESS' },
 }))
 jest.mock('../lib/supabase', () => ({ supabase: { from: jest.fn() } }))
+jest.mock('../lib/auth', () => ({ ensureSession: jest.fn() }))
 jest.mock('../lib/theme', () => ({
   colors: {}, fonts: {}, radii: {}, spacing: {},
 }))

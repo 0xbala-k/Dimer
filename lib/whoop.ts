@@ -11,6 +11,7 @@ const KEYS = {
   accessToken: 'whoop_access_token',
   refreshToken: 'whoop_refresh_token',
   expiresAt: 'whoop_expires_at',
+  userId: 'whoop_user_id',
 }
 
 export async function saveWhoopTokens(params: {
@@ -31,7 +32,27 @@ export async function clearWhoopTokens() {
     SecureStore.deleteItemAsync(KEYS.accessToken),
     SecureStore.deleteItemAsync(KEYS.refreshToken),
     SecureStore.deleteItemAsync(KEYS.expiresAt),
+    SecureStore.deleteItemAsync(KEYS.userId),
   ])
+}
+
+/**
+ * Returns the Whoop user id (as a string), fetching the basic profile once and
+ * caching it in SecureStore. Used as the NOT NULL whoop_user_id on the users row.
+ */
+export async function fetchWhoopUserId(): Promise<string | null> {
+  const cached = await SecureStore.getItemAsync(KEYS.userId)
+  if (cached) return cached
+  try {
+    const res = await whoopFetch('/user/profile/basic')
+    if (!res.ok) return null
+    const data = await res.json()
+    const id = data?.user_id != null ? String(data.user_id) : null
+    if (id) await SecureStore.setItemAsync(KEYS.userId, id)
+    return id
+  } catch {
+    return null
+  }
 }
 
 let _authCheckPromise: Promise<string | null> | null = null
