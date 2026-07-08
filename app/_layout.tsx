@@ -13,6 +13,7 @@ import { DMMono_400Regular, DMMono_500Medium } from '@expo-google-fonts/dm-mono'
 import { DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold } from '@expo-google-fonts/dm-sans'
 import { Inter_500Medium, Inter_600SemiBold } from '@expo-google-fonts/inter'
 import { getValidAccessToken } from '../lib/whoop'
+import { ensureSession, syncUserRow } from '../lib/auth'
 import { colors } from '../lib/theme'
 import { View } from 'react-native'
 
@@ -34,9 +35,16 @@ export default function RootLayout() {
   })
 
   useEffect(() => {
-    getValidAccessToken().then(() => {
-      setAuthChecked(true)
-    })
+    async function bootstrap() {
+      // Anon Supabase session first — RLS needs auth.uid() to be non-null.
+      await ensureSession()
+      // If already signed into Whoop, make sure the users row exists so saves work.
+      const token = await getValidAccessToken()
+      if (token) await syncUserRow()
+    }
+    bootstrap()
+      .catch((e) => console.error('[bootstrap] failed:', e))
+      .finally(() => setAuthChecked(true))
   }, [])
 
   useEffect(() => {

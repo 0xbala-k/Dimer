@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { View, Text, TextInput, Pressable, StyleSheet, Alert } from 'react-native'
 import * as Haptics from 'expo-haptics'
 import { supabase } from '../lib/supabase'
+import { ensureSession } from '../lib/auth'
 import { colors, fonts, radii, spacing } from '../lib/theme'
 import { GlassCard } from './GlassCard'
 import type { FoodResult } from '../lib/types'
@@ -63,7 +64,9 @@ export function ConfirmFoodCard({ result, inputMethod, onSaved, onRetake }: Prop
     setSaving(true)
     try {
       const today = new Date().toISOString().split('T')[0]
+      const userId = await ensureSession()
       const { error } = await supabase.from('food_logs').insert({
+        user_id: userId,
         date: today,
         source: inputMethod,
         name: fields.name,
@@ -81,9 +84,10 @@ export function ConfirmFoodCard({ result, inputMethod, onSaved, onRetake }: Prop
         .from('daily_summaries')
         .select('calories_consumed')
         .eq('date', today)
-        .single()
+        .maybeSingle()
 
       await supabase.from('daily_summaries').upsert({
+        user_id: userId,
         date: today,
         calories_consumed: (existing?.calories_consumed ?? 0) + fields.calories,
         updated_at: new Date().toISOString(),
@@ -92,6 +96,7 @@ export function ConfirmFoodCard({ result, inputMethod, onSaved, onRetake }: Prop
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       onSaved()
     } catch (e) {
+      console.error('[ConfirmFoodCard] save failed:', e)
       Alert.alert('Failed to save', 'Check your connection and try again.')
     } finally {
       setSaving(false)

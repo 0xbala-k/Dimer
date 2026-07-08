@@ -6,10 +6,11 @@ import * as WebBrowser from 'expo-web-browser'
 import Svg, { Circle, Path, Defs, LinearGradient, Stop } from 'react-native-svg'
 import { colors, fonts } from '../lib/theme'
 import { DISCOVERY, saveWhoopTokens } from '../lib/whoop'
+import { syncUserRow } from '../lib/auth'
 
 const CLIENT_ID = process.env.EXPO_PUBLIC_WHOOP_CLIENT_ID!
 const CLIENT_SECRET = process.env.EXPO_PUBLIC_WHOOP_CLIENT_SECRET!
-const WHOOP_SCOPES = ['offline', 'read:cycles', 'read:body_measurement']
+const WHOOP_SCOPES = ['offline', 'read:cycles', 'read:body_measurement', 'read:profile']
 
 export default function LoginScreen() {
   const redirectUri = AuthSession.makeRedirectUri({ scheme: 'dimer', path: 'auth/callback' })
@@ -50,6 +51,9 @@ export default function LoginScreen() {
       const tokens = JSON.parse(tokenBody)
       if (!tokens?.access_token || !tokens?.refresh_token) return
       await saveWhoopTokens(tokens)
+      // Create the Supabase users row now that we have a Whoop identity, so
+      // food saves (which FK to users) work immediately.
+      await syncUserRow()
       router.replace('/dashboard')
     } catch (e) {
       console.log('[Whoop] token exchange error:', e)
