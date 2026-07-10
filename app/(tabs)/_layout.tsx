@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router'
-import * as Haptics from 'expo-haptics'
+import { haptics } from '../../lib/haptics'
 import { colors, fonts } from '../../lib/theme'
 import Svg, { Path, Circle, Polyline, Line } from 'react-native-svg'
 
@@ -50,7 +50,7 @@ export default function TabsLayout() {
         tabBarLabelStyle: { fontFamily: fonts.label, fontSize: 10, letterSpacing: 0.5 },
       }}
       screenListeners={{
-        tabPress: () => { Haptics.selectionAsync() },
+        tabPress: () => { haptics.selection() },
       }}
     >
       <Tabs.Screen

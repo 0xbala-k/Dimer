@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { View, Text, TextInput, Pressable, StyleSheet, Alert } from 'react-native'
-import * as Haptics from 'expo-haptics'
+import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native'
+import { haptics, NotificationFeedbackType } from '../lib/haptics'
+import { showAlert } from '../lib/alert'
 import { supabase } from '../lib/supabase'
 import { ensureSession } from '../lib/auth'
 import { colors, fonts, radii, spacing } from '../lib/theme'
@@ -93,11 +94,11 @@ export function ConfirmFoodCard({ result, inputMethod, onSaved, onRetake }: Prop
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id,date' })
 
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      haptics.notification(NotificationFeedbackType.Success)
       onSaved()
     } catch (e) {
       console.error('[ConfirmFoodCard] save failed:', e)
-      Alert.alert('Failed to save', 'Check your connection and try again.')
+      showAlert('Failed to save', 'Check your connection and try again.')
     } finally {
       setSaving(false)
     }

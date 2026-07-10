@@ -20,6 +20,18 @@
         "NSPhotoLibraryUsageDescription": "Used to select food photos from your library"
       }
     },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/favicon.png",
+      "name": "Dimer",
+      "shortName": "Dimer",
+      "themeColor": "#070B14",
+      "backgroundColor": "#070B14",
+      "description": "Know your deficit. Own your day.",
+      "display": "standalone",
+      "orientation": "portrait"
+    },
     "plugins": [
       "expo-router",
       [

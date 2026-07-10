@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { View, Text, TextInput, Pressable, ActivityIndicator, Alert, StyleSheet } from 'react-native'
+import { View, Text, TextInput, Pressable, ActivityIndicator, StyleSheet } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
+import { showAlert } from '../lib/alert'
 import * as ImageManipulator from 'expo-image-manipulator'
 import Svg, { Path, Circle } from 'react-native-svg'
 import { analyzeFood } from '../lib/api'
@@ -35,7 +36,7 @@ export function PhotoInput({ onResult }: Props) {
       const food = await analyzeFood({ mode: 'photo', data: base64, description: description.trim() || undefined })
       onResult(food)
     } catch (e) {
-      Alert.alert('Could not analyze photo', 'Try a clearer photo or use text entry.')
+      showAlert('Could not analyze photo', 'Try a clearer photo or use text entry.')
     } finally {
       setLoading(false)
     }

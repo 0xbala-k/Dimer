@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { View, TextInput, Text, Pressable, ActivityIndicator, Alert, StyleSheet } from 'react-native'
+import { View, TextInput, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native'
 import { analyzeFood } from '../lib/api'
+import { showAlert } from '../lib/alert'
 import { colors, fonts, radii } from '../lib/theme'
 import type { FoodResult } from '../lib/types'
 
@@ -19,7 +20,7 @@ export function TextFoodInput({ onResult }: Props) {
       const result = await analyzeFood({ mode: 'text', data: text.trim() })
       onResult(result)
     } catch {
-      Alert.alert('Could not analyze', 'Try being more specific, e.g. "200g grilled salmon".')
+      showAlert('Could not analyze', 'Try being more specific, e.g. "200g grilled salmon".')
     } finally {
       setLoading(false)
     }

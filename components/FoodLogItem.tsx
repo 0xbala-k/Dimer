@@ -1,7 +1,8 @@
 import { useRef } from 'react'
-import { View, Text, Pressable, StyleSheet, Alert } from 'react-native'
+import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { Swipeable } from 'react-native-gesture-handler'
-import * as Haptics from 'expo-haptics'
+import { haptics, ImpactFeedbackStyle } from '../lib/haptics'
+import { showAlert } from '../lib/alert'
 import { colors, fonts, radii } from '../lib/theme'
 import type { FoodLog } from '../lib/types'
 
@@ -21,13 +22,13 @@ export function FoodLogItem({ log, onDelete }: Props) {
   const swipeRef = useRef<Swipeable>(null)
 
   function handleDelete() {
-    Alert.alert('Delete entry?', log.name, [
-      { text: 'Cancel', onPress: () => swipeRef.current?.close() },
+    showAlert('Delete entry?', log.name, [
+      { text: 'Cancel', style: 'cancel', onPress: () => swipeRef.current?.close() },
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: async () => {
-          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+        onPress: () => {
+          haptics.impact(ImpactFeedbackStyle.Medium)
           onDelete(log.id)
         },
       },

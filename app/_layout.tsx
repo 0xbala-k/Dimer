@@ -3,6 +3,7 @@ import 'react-native-gesture-handler'
 import '../global.css'
 import { useEffect, useState } from 'react'
 import { Stack } from 'expo-router'
+import Head from 'expo-router/head'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
@@ -56,6 +57,10 @@ export default function RootLayout() {
   }
 
   return (
+    <>
+    <Head>
+      <title>Dimer</title>
+    </Head>
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <BottomSheetModalProvider>
@@ -68,5 +73,6 @@ export default function RootLayout() {
         </BottomSheetModalProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
+    </>
   )
 }

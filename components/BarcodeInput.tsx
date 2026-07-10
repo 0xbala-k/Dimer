@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { View, Text, Pressable, ActivityIndicator, Alert, StyleSheet } from 'react-native'
+import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native'
 import { CameraView, useCameraPermissions } from 'expo-camera'
+import { showAlert } from '../lib/alert'
 import { fetchByBarcode } from '../lib/openfoodfacts'
 import { colors, fonts, radii } from '../lib/theme'
 import type { FoodResult } from '../lib/types'
@@ -30,14 +31,14 @@ export function BarcodeInput({ onResult }: Props) {
     try {
       const result = await fetchByBarcode(data)
       if (!result) {
-        Alert.alert('Product not found', "This barcode isn't in Open Food Facts. Try text entry instead.", [
+        showAlert('Product not found', "This barcode isn't in Open Food Facts. Try text entry instead.", [
           { text: 'OK', onPress: () => { setScanned(false); setLoading(false) } },
         ])
         return
       }
       onResult(result)
     } catch {
-      Alert.alert('Scan failed', 'Check your connection and try again.')
+      showAlert('Scan failed', 'Check your connection and try again.')
       setScanned(false)
     } finally {
       setLoading(false)
