@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { View, Text, Pressable, ActivityIndicator, Alert, StyleSheet } from 'react-native'
+import { View, Text, TextInput, Pressable, ActivityIndicator, Alert, StyleSheet } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
 import * as ImageManipulator from 'expo-image-manipulator'
 import Svg, { Path, Circle } from 'react-native-svg'
@@ -22,6 +22,7 @@ async function compressForAPI(uri: string): Promise<string> {
 
 export function PhotoInput({ onResult }: Props) {
   const [loading, setLoading] = useState(false)
+  const [description, setDescription] = useState('')
 
   async function pickAndAnalyze(fromCamera: boolean) {
     const fn = fromCamera ? ImagePicker.launchCameraAsync : ImagePicker.launchImageLibraryAsync
@@ -31,7 +32,7 @@ export function PhotoInput({ onResult }: Props) {
     setLoading(true)
     try {
       const base64 = await compressForAPI(result.assets[0].uri)
-      const food = await analyzeFood({ mode: 'photo', data: base64 })
+      const food = await analyzeFood({ mode: 'photo', data: base64, description: description.trim() || undefined })
       onResult(food)
     } catch (e) {
       Alert.alert('Could not analyze photo', 'Try a clearer photo or use text entry.')
@@ -53,6 +54,18 @@ export function PhotoInput({ onResult }: Props) {
         }
       </Pressable>
 
+      <TextInput
+        style={s.descInput}
+        value={description}
+        onChangeText={setDescription}
+        placeholder={'Optional: describe the food, e.g. "grilled chicken, extra rice"'}
+        placeholderTextColor={colors.textDim}
+        maxLength={500}
+        editable={!loading}
+        returnKeyType="done"
+        accessibilityLabel="Optional food description"
+      />
+
       <View style={s.actions}>
         <Pressable style={({ pressed }) => [s.btnSecondary, pressed && { opacity: 0.7 }]} onPress={() => pickAndAnalyze(true)} disabled={loading}>
           <Text style={s.btnSecText}>Open Camera</Text>
@@ -69,6 +82,7 @@ const s = StyleSheet.create({
   container: { gap: 12 },
   zone: { backgroundColor: `${colors.primary}05`, borderWidth: 1, borderStyle: 'dashed', borderColor: `${colors.primary}18`, borderRadius: radii.lg, height: 130, alignItems: 'center', justifyContent: 'center', gap: 8 },
   hint: { fontFamily: fonts.label, fontSize: 12, color: colors.textDim },
+  descInput: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.cardBorder, borderRadius: radii.md, paddingHorizontal: 14, paddingVertical: 12, fontFamily: fonts.body, fontSize: 14, color: colors.text },
   actions: { flexDirection: 'row', gap: 8 },
   btnSecondary: { flex: 1, padding: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.cardBorder, borderRadius: radii.md, alignItems: 'center' },
   btnSecText: { fontFamily: fonts.labelSemiBold, fontSize: 11, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 1 },

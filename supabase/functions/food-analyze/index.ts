@@ -33,8 +33,9 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
-    const { mode, data } = await req.json() as { mode: 'photo' | 'text', data: string }
-    if (!['photo', 'text'].includes(mode) || typeof data !== 'string') {
+    const { mode, data, description } = await req.json() as { mode: 'photo' | 'text', data: string, description?: string }
+    if (!['photo', 'text'].includes(mode) || typeof data !== 'string'
+      || (description !== undefined && typeof description !== 'string')) {
       return new Response(JSON.stringify({ error: 'invalid_input' }), {
         status: 400,
         headers: { ...CORS, 'Content-Type': 'application/json' },
@@ -43,10 +44,16 @@ serve(async (req) => {
 
     const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY') ?? ''
 
+    // hint is user-controlled text — keep it inside the user turn, never the system prompt
+    const hint = description?.trim().slice(0, 500)
+    const photoPrompt = hint
+      ? `Analyze this food photo and return the JSON. The user describes it as: "${hint}". Use this to guide identification and portion estimates, but trust the photo for what is visible.`
+      : 'Analyze this food photo and return the JSON.'
+
     const messages = mode === 'photo'
       ? [{ role: 'user', content: [
           { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data } },
-          { type: 'text', text: 'Analyze this food photo and return the JSON.' },
+          { type: 'text', text: photoPrompt },
         ]}]
       : [{ role: 'user', content: `Analyze this food and return JSON: ${data}` }]
 

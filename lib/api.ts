@@ -4,9 +4,14 @@ import type { FoodResult, RestaurantResult } from './types'
 export async function analyzeFood(params: {
   mode: 'photo' | 'text'
   data: string
+  description?: string
 }): Promise<FoodResult> {
   const { data, error } = await supabase.functions.invoke('food-analyze', {
-    body: { mode: params.mode, data: params.data },
+    body: {
+      mode: params.mode,
+      data: params.data,
+      ...(params.description ? { description: params.description } : {}),
+    },
   })
   if (error) throw error
   if (data?.error) throw new Error(data.error)
