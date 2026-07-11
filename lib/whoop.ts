@@ -1,4 +1,4 @@
-import * as SecureStore from 'expo-secure-store'
+import { storage } from './storage'
 import type { WhoopData } from './types'
 
 const WHOOP_CLIENT_ID = process.env.EXPO_PUBLIC_WHOOP_CLIENT_ID!
@@ -21,34 +21,34 @@ export async function saveWhoopTokens(params: {
 }) {
   const expiresAt = Date.now() + params.expires_in * 1000
   await Promise.all([
-    SecureStore.setItemAsync(KEYS.accessToken, params.access_token),
-    SecureStore.setItemAsync(KEYS.refreshToken, params.refresh_token),
-    SecureStore.setItemAsync(KEYS.expiresAt, String(expiresAt)),
+    storage.setItem(KEYS.accessToken, params.access_token),
+    storage.setItem(KEYS.refreshToken, params.refresh_token),
+    storage.setItem(KEYS.expiresAt, String(expiresAt)),
   ])
 }
 
 export async function clearWhoopTokens() {
   await Promise.all([
-    SecureStore.deleteItemAsync(KEYS.accessToken),
-    SecureStore.deleteItemAsync(KEYS.refreshToken),
-    SecureStore.deleteItemAsync(KEYS.expiresAt),
-    SecureStore.deleteItemAsync(KEYS.userId),
+    storage.removeItem(KEYS.accessToken),
+    storage.removeItem(KEYS.refreshToken),
+    storage.removeItem(KEYS.expiresAt),
+    storage.removeItem(KEYS.userId),
   ])
 }
 
 /**
  * Returns the Whoop user id (as a string), fetching the basic profile once and
- * caching it in SecureStore. Used as the NOT NULL whoop_user_id on the users row.
+ * caching it in storage. Used as the NOT NULL whoop_user_id on the users row.
  */
 export async function fetchWhoopUserId(): Promise<string | null> {
-  const cached = await SecureStore.getItemAsync(KEYS.userId)
+  const cached = await storage.getItem(KEYS.userId)
   if (cached) return cached
   try {
     const res = await whoopFetch('/user/profile/basic')
     if (!res.ok) return null
     const data = await res.json()
     const id = data?.user_id != null ? String(data.user_id) : null
-    if (id) await SecureStore.setItemAsync(KEYS.userId, id)
+    if (id) await storage.setItem(KEYS.userId, id)
     return id
   } catch {
     return null
@@ -59,9 +59,9 @@ let _authCheckPromise: Promise<string | null> | null = null
 
 async function _getValidAccessToken(): Promise<string | null> {
   const [token, refreshToken, expiresAtStr] = await Promise.all([
-    SecureStore.getItemAsync(KEYS.accessToken),
-    SecureStore.getItemAsync(KEYS.refreshToken),
-    SecureStore.getItemAsync(KEYS.expiresAt),
+    storage.getItem(KEYS.accessToken),
+    storage.getItem(KEYS.refreshToken),
+    storage.getItem(KEYS.expiresAt),
   ])
 
   if (!token) return null

@@ -1,6 +1,6 @@
 # Dimer
 
-A personal calorie deficit tracker for iPhone. Dimer reads your daily calorie burn from Whoop and lets you log food via photo, text, restaurant search, or barcode — so you always know exactly how much room you have to eat.
+A personal calorie deficit tracker, installable as a PWA on any phone (no App Store or Apple Developer account needed). Dimer reads your daily calorie burn from Whoop and lets you log food via photo, text, restaurant search, or barcode — so you always know exactly how much room you have to eat.
 
 ## Features
 
@@ -22,7 +22,8 @@ A personal calorie deficit tracker for iPhone. Dimer reads your daily calorie bu
 | Backend | Supabase (Postgres + Realtime + Edge Functions) |
 | Food APIs | Cal AI, Spoonacular, Open Food Facts |
 | Animation | react-native-reanimated v3 + react-native-svg |
-| Storage | `expo-secure-store` for tokens |
+| Storage | `expo-secure-store` (native) / `localStorage` (web) via `lib/storage` |
+| Web | react-native-web + Metro static export, PWA (manifest + service worker) |
 
 ## Prerequisites
 
@@ -97,6 +98,31 @@ npx expo start --clear
 ```
 
 Press `r` to reload, `j` to open React Native DevTools.
+
+## Web / PWA
+
+The app runs as a Progressive Web App via react-native-web — same codebase, no native build required.
+
+```bash
+npm run web        # dev server in the browser
+npm run build:web  # production static export to dist/
+npm run serve:web  # serve dist/ locally on :3000
+```
+
+Deploy `dist/` to any static host (Vercel, Netlify, Cloudflare Pages). The PWA needs HTTPS for
+service worker + camera access. Add your deployed origin's callback,
+e.g. `https://<your-domain>/auth/callback`, to the Whoop app's **Allowed Redirect URIs**.
+
+Platform notes:
+
+- **Install**: on iOS Safari use Share → "Add to Home Screen"; Chrome/Edge/Android show an install prompt.
+- **Tokens** are stored in `localStorage` on web (`lib/storage.web.ts`) instead of SecureStore. Unlike
+  the native Keychain, localStorage is readable by any script on the origin — an XSS could exfiltrate
+  the Whoop refresh token. Acceptable for a personal deployment; a backend token proxy with httpOnly
+  cookies is the upgrade path for anything multi-user.
+- **Barcode scanning** uses the browser `BarcodeDetector` API (Chrome/Edge/Android); Safari and
+  Firefox fall back to manual barcode entry (`components/BarcodeInput.web.tsx`).
+- **Offline**: `public/sw.js` caches the app shell and static assets; API calls always go to the network.
 
 ## Tests
 

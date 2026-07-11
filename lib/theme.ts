@@ -9,6 +9,9 @@ export const colors = {
   fat: '#F472B6',
   fiber: '#34D399',
 
+  // Mirrored outside the JS bundle: public/manifest.json (theme/background
+  // color) and app/+html.tsx (theme-color meta, body background). Update all
+  // three together when rebranding.
   bg: '#070B14',
   card: 'rgba(56,189,248,0.025)',
   cardBorder: 'rgba(56,189,248,0.08)',

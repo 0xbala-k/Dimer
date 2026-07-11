@@ -20,6 +20,11 @@
         "NSPhotoLibraryUsageDescription": "Used to select food photos from your library"
       }
     },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/favicon.png"
+    },
     "plugins": [
       "expo-router",
       [

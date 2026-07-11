@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { View, TextInput, Text, Pressable, ActivityIndicator, Alert, StyleSheet } from 'react-native'
+import { View, TextInput, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native'
 import { searchRestaurant, getRestaurantItem } from '../lib/api'
+import { showAlert } from '../lib/alert'
 import { colors, fonts, radii } from '../lib/theme'
 import { GlassCard } from './GlassCard'
 import type { FoodResult, RestaurantResult } from '../lib/types'
@@ -23,9 +24,9 @@ export function RestaurantSearch({ onResult }: Props) {
       setResults(items)
     } catch (e) {
       if (String(e).includes('quota_exceeded')) {
-        Alert.alert('Daily limit reached', 'Spoonacular free tier: 150 searches/day. Try tomorrow or use text entry.')
+        showAlert('Daily limit reached', 'Spoonacular free tier: 150 searches/day. Try tomorrow or use text entry.')
       } else {
-        Alert.alert('Search failed', 'Check your connection and try again.')
+        showAlert('Search failed', 'Check your connection and try again.')
       }
     } finally {
       setSearching(false)
