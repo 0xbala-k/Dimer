@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, createElement } from 'react'
 import { View, Text, Pressable, TextInput, ActivityIndicator, StyleSheet } from 'react-native'
-import { fetchByBarcode } from '../lib/openfoodfacts'
+import { lookupBarcode, barcodeStyles as sb } from './barcodeShared'
 import { showAlert } from '../lib/alert'
 import { colors, fonts, radii } from '../lib/theme'
 import type { FoodResult } from '../lib/types'
@@ -15,6 +15,8 @@ type BarcodeDetectorLike = {
 }
 
 const BARCODE_FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code']
+const SCAN_INTERVAL_MS = 200
+const VIDEO_STYLE = { width: '100%', height: '100%', objectFit: 'cover' } as const
 
 function scannerSupported(): boolean {
   return (
@@ -32,15 +34,17 @@ export function BarcodeInput({ onResult }: Props) {
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
-  const rafRef = useRef<number | null>(null)
-  const handledRef = useRef(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // True while a detected code is being looked up: pauses detection without
+  // killing the scan loop, so a failed lookup resumes scanning.
+  const busyRef = useRef(false)
 
   const supported = scannerSupported()
 
   function stopCamera() {
-    if (rafRef.current !== null) {
-      cancelAnimationFrame(rafRef.current)
-      rafRef.current = null
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
     }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop())
@@ -49,42 +53,28 @@ export function BarcodeInput({ onResult }: Props) {
     if (videoRef.current) {
       videoRef.current.srcObject = null
     }
+    busyRef.current = false
   }
 
   // Cleanup on unmount.
   useEffect(() => stopCamera, [])
 
-  async function lookup(barcode: string) {
-    if (loading) return
-    setLoading(true)
-    try {
-      const result = await fetchByBarcode(barcode.trim())
-      if (!result) {
-        showAlert('Product not found', "This barcode isn't in Open Food Facts. Try text entry instead.", [
-          { text: 'OK', onPress: () => { handledRef.current = false } },
-        ])
-        return
-      }
-      stopCamera()
-      setScanning(false)
-      onResult(result)
-    } catch {
-      showAlert('Scan failed', 'Check your connection and try again.')
-      handledRef.current = false
-    } finally {
-      setLoading(false)
-    }
+  function handleSuccess(result: FoodResult) {
+    stopCamera()
+    setScanning(false)
+    onResult(result)
   }
 
   async function handleOpen() {
     setScanning(true)
-    handledRef.current = false
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
       streamRef.current = stream
       const video = videoRef.current
       if (!video) {
         stream.getTracks().forEach((t) => t.stop())
+        streamRef.current = null
+        setScanning(false)
         return
       }
       video.srcObject = stream
@@ -93,25 +83,29 @@ export function BarcodeInput({ onResult }: Props) {
 
       const detector: BarcodeDetectorLike = new (window as any).BarcodeDetector({ formats: BARCODE_FORMATS })
 
-      let lastCheck = 0
-      const tick = async (now: number) => {
-        if (handledRef.current || !videoRef.current) return
-        if (now - lastCheck >= 200) {
-          lastCheck = now
+      const tick = async () => {
+        // Camera was stopped (cancel/success/unmount) — end the loop.
+        if (!streamRef.current || !videoRef.current) return
+        if (!busyRef.current) {
           try {
             const codes = await detector.detect(videoRef.current)
-            if (codes.length > 0 && !handledRef.current) {
-              handledRef.current = true
-              await lookup(codes[0].rawValue)
-              return
+            if (codes.length > 0 && !busyRef.current) {
+              busyRef.current = true
+              setLoading(true)
+              await lookupBarcode(codes[0].rawValue, handleSuccess, () => {
+                busyRef.current = false
+              })
+              setLoading(false)
             }
           } catch {
             // Transient decode errors are expected between frames — keep polling.
           }
         }
-        rafRef.current = requestAnimationFrame(tick)
+        // Always reschedule while the camera runs, so not-found / failed
+        // lookups resume scanning instead of freezing the scanner.
+        timerRef.current = setTimeout(tick, SCAN_INTERVAL_MS)
       }
-      rafRef.current = requestAnimationFrame(tick)
+      timerRef.current = setTimeout(tick, SCAN_INTERVAL_MS)
     } catch {
       showAlert('Camera unavailable', 'Could not access the camera. Enter the barcode number below instead.')
       stopCamera()
@@ -122,44 +116,48 @@ export function BarcodeInput({ onResult }: Props) {
   function handleCancel() {
     stopCamera()
     setScanning(false)
-    handledRef.current = false
   }
 
-  function handleManualSubmit() {
+  async function handleManualSubmit() {
     const value = manual.trim()
-    if (!value) return
-    handledRef.current = true
-    lookup(value)
+    if (!value || loading) return
+    // Pause live detection (if the scanner is open) while this lookup runs.
+    busyRef.current = true
+    setLoading(true)
+    await lookupBarcode(value, handleSuccess, () => {
+      busyRef.current = false
+    })
+    setLoading(false)
   }
 
   return (
     <View style={s.container}>
       {scanning ? (
-        <View style={s.scannerWrap}>
+        <View style={sb.scannerWrap}>
           {createElement('video', {
             ref: videoRef,
             muted: true,
             autoPlay: true,
             playsInline: true,
-            style: { width: '100%', height: '100%', objectFit: 'cover' },
+            style: VIDEO_STYLE,
           })}
           {loading && (
-            <View style={s.overlay}>
+            <View style={sb.overlay}>
               <ActivityIndicator color={colors.primary} size="large" />
-              <Text style={s.overlayText}>Looking up barcode…</Text>
+              <Text style={sb.overlayText}>Looking up barcode…</Text>
             </View>
           )}
-          <View style={s.frame} />
-          <Pressable style={s.cancelBtn} onPress={handleCancel}>
-            <Text style={s.cancelText}>Cancel</Text>
+          <View style={sb.frame} />
+          <Pressable style={sb.cancelBtn} onPress={handleCancel}>
+            <Text style={sb.cancelText}>Cancel</Text>
           </Pressable>
         </View>
       ) : (
         <>
-          <Text style={s.hint}>Scan a product barcode to get nutrition data from Open Food Facts (free, no API key).</Text>
+          <Text style={sb.hint}>Scan a product barcode to get nutrition data from Open Food Facts (free, no API key).</Text>
           {supported && (
-            <Pressable style={({ pressed }) => [s.btn, pressed && { opacity: 0.85 }]} onPress={handleOpen}>
-              <Text style={s.btnText}>Open Scanner →</Text>
+            <Pressable style={({ pressed }) => [sb.btn, pressed && { opacity: 0.85 }]} onPress={handleOpen}>
+              <Text style={sb.btnText}>Open Scanner →</Text>
             </Pressable>
           )}
         </>
@@ -188,7 +186,7 @@ export function BarcodeInput({ onResult }: Props) {
             {loading && !scanning ? (
               <ActivityIndicator color={colors.bg} size="small" />
             ) : (
-              <Text style={s.btnText}>Look up</Text>
+              <Text style={sb.btnText}>Look up</Text>
             )}
           </Pressable>
         </View>
@@ -199,15 +197,6 @@ export function BarcodeInput({ onResult }: Props) {
 
 const s = StyleSheet.create({
   container: { gap: 16, padding: 4 },
-  hint: { fontFamily: fonts.body, fontSize: 13, color: colors.textMuted, lineHeight: 20 },
-  btn: { padding: 14, backgroundColor: colors.primary, borderRadius: radii.md, alignItems: 'center' },
-  btnText: { fontFamily: fonts.labelSemiBold, fontSize: 12, color: colors.bg, textTransform: 'uppercase', letterSpacing: 1 },
-  scannerWrap: { height: 300, borderRadius: radii.lg, overflow: 'hidden', position: 'relative', backgroundColor: colors.bg },
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(7,11,20,0.7)', alignItems: 'center', justifyContent: 'center', gap: 12 },
-  overlayText: { fontFamily: fonts.label, fontSize: 13, color: colors.text },
-  frame: { position: 'absolute', width: 200, height: 120, borderWidth: 2, borderColor: colors.primary, borderRadius: 8, top: '50%', left: '50%', transform: [{ translateX: -100 }, { translateY: -60 }] },
-  cancelBtn: { position: 'absolute', bottom: 12, alignSelf: 'center', padding: 10, backgroundColor: colors.card, borderRadius: radii.md, borderWidth: 1, borderColor: colors.cardBorder },
-  cancelText: { fontFamily: fonts.labelSemiBold, fontSize: 12, color: colors.textMuted },
   manualBlock: { gap: 8 },
   manualLabel: { fontFamily: fonts.label, fontSize: 12, color: colors.textMuted },
   manualRow: { flexDirection: 'row', gap: 8, alignItems: 'stretch' },

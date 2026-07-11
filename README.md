@@ -116,7 +116,10 @@ e.g. `https://<your-domain>/auth/callback`, to the Whoop app's **Allowed Redirec
 Platform notes:
 
 - **Install**: on iOS Safari use Share → "Add to Home Screen"; Chrome/Edge/Android show an install prompt.
-- **Tokens** are stored in `localStorage` on web (`lib/storage.web.ts`) instead of SecureStore.
+- **Tokens** are stored in `localStorage` on web (`lib/storage.web.ts`) instead of SecureStore. Unlike
+  the native Keychain, localStorage is readable by any script on the origin — an XSS could exfiltrate
+  the Whoop refresh token. Acceptable for a personal deployment; a backend token proxy with httpOnly
+  cookies is the upgrade path for anything multi-user.
 - **Barcode scanning** uses the browser `BarcodeDetector` API (Chrome/Edge/Android); Safari and
   Firefox fall back to manual barcode entry (`components/BarcodeInput.web.tsx`).
 - **Offline**: `public/sw.js` caches the app shell and static assets; API calls always go to the network.
