@@ -1,7 +1,7 @@
 import { storage } from './storage'
+import { supabase } from './supabase'
 import type { WhoopData } from './types'
 
-const WHOOP_CLIENT_ID = process.env.EXPO_PUBLIC_WHOOP_CLIENT_ID!
 export const DISCOVERY = {
   authorizationEndpoint: 'https://api.prod.whoop.com/oauth/oauth2/auth',
   tokenEndpoint: 'https://api.prod.whoop.com/oauth/oauth2/token',
@@ -12,6 +12,18 @@ const KEYS = {
   refreshToken: 'whoop_refresh_token',
   expiresAt: 'whoop_expires_at',
   userId: 'whoop_user_id',
+}
+
+/**
+ * All Whoop traffic goes through the whoop-proxy edge function: Whoop sends
+ * no CORS headers so the browser can't call it directly, and the proxy holds
+ * the client secret server-side. It always responds 200 with Whoop's real
+ * { status, body } tucked inside.
+ */
+async function whoopProxy(body: object): Promise<{ status: number; body: any } | null> {
+  const { data, error } = await supabase.functions.invoke('whoop-proxy', { body })
+  if (error || typeof data?.status !== 'number') return null
+  return data as { status: number; body: any }
 }
 
 export async function saveWhoopTokens(params: {
@@ -37,6 +49,26 @@ export async function clearWhoopTokens() {
 }
 
 /**
+ * Exchanges an authorization code for tokens (via the proxy, which adds the
+ * client credentials) and persists them. Returns whether login succeeded.
+ */
+export async function exchangeWhoopCode(params: {
+  code: string
+  redirect_uri: string
+  code_verifier: string
+}): Promise<boolean> {
+  const res = await whoopProxy({
+    action: 'token',
+    params: { grant_type: 'authorization_code', ...params },
+  })
+  console.log('[Whoop] token status:', res?.status ?? 'proxy failed')
+  const tokens = res?.status === 200 ? res.body : null
+  if (!tokens?.access_token || !tokens?.refresh_token) return false
+  await saveWhoopTokens(tokens)
+  return true
+}
+
+/**
  * Returns the Whoop user id (as a string), fetching the basic profile once and
  * caching it in storage. Used as the NOT NULL whoop_user_id on the users row.
  */
@@ -44,10 +76,9 @@ export async function fetchWhoopUserId(): Promise<string | null> {
   const cached = await storage.getItem(KEYS.userId)
   if (cached) return cached
   try {
-    const res = await whoopFetch('/user/profile/basic')
+    const res = await whoopGet('/user/profile/basic')
     if (!res.ok) return null
-    const data = await res.json()
-    const id = data?.user_id != null ? String(data.user_id) : null
+    const id = res.data?.user_id != null ? String(res.data.user_id) : null
     if (id) await storage.setItem(KEYS.userId, id)
     return id
   } catch {
@@ -72,17 +103,12 @@ async function _getValidAccessToken(): Promise<string | null> {
 
   if (!refreshToken) return null
   try {
-    const res = await fetch(DISCOVERY.tokenEndpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        client_id: WHOOP_CLIENT_ID,
-        refresh_token: refreshToken,
-      }).toString(),
+    const res = await whoopProxy({
+      action: 'token',
+      params: { grant_type: 'refresh_token', refresh_token: refreshToken },
     })
-    if (!res.ok) return null
-    const data = await res.json()
+    if (!res || res.status !== 200) return null
+    const data = res.body
     if (!data?.access_token) return null
     await saveWhoopTokens(data)
     return data.access_token
@@ -100,12 +126,12 @@ export function getValidAccessToken(): Promise<string | null> {
   return _authCheckPromise
 }
 
-async function whoopFetch(path: string): Promise<Response> {
+async function whoopGet(path: string): Promise<{ ok: boolean; status: number; data: any }> {
   const token = await getValidAccessToken()
   if (!token) throw new Error('no_token')
-  return fetch(`https://api.prod.whoop.com/developer/v1${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
+  const res = await whoopProxy({ action: 'api', path, access_token: token })
+  if (!res) throw new Error('proxy_failed')
+  return { ok: res.status >= 200 && res.status < 300, status: res.status, data: res.body }
 }
 
 export async function fetchTodayWhoopData(): Promise<WhoopData> {
@@ -113,9 +139,9 @@ export async function fetchTodayWhoopData(): Promise<WhoopData> {
   const start = `${today}T00:00:00.000Z`
   const end = `${today}T23:59:59.999Z`
 
-  const res = await whoopFetch(`/cycle?start=${start}&end=${end}`)
+  const res = await whoopGet(`/cycle?start=${start}&end=${end}`)
   if (!res.ok) throw new Error(`Whoop API error: ${res.status}`)
-  const data = await res.json()
+  const data = res.data
 
   const cycles: { score?: { kilojoule?: number; strain?: number } }[] = data.records ?? []
 
