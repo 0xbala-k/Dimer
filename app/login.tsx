@@ -5,11 +5,10 @@ import * as AuthSession from 'expo-auth-session'
 import * as WebBrowser from 'expo-web-browser'
 import Svg, { Circle, Path, Defs, LinearGradient, Stop } from 'react-native-svg'
 import { colors, fonts } from '../lib/theme'
-import { DISCOVERY, saveWhoopTokens } from '../lib/whoop'
+import { DISCOVERY, exchangeWhoopCode } from '../lib/whoop'
 import { syncUserRow } from '../lib/auth'
 
 const CLIENT_ID = process.env.EXPO_PUBLIC_WHOOP_CLIENT_ID!
-const CLIENT_SECRET = process.env.EXPO_PUBLIC_WHOOP_CLIENT_SECRET!
 const WHOOP_SCOPES = ['offline', 'read:cycles', 'read:body_measurement', 'read:profile']
 
 export default function LoginScreen() {
@@ -33,24 +32,14 @@ export default function LoginScreen() {
     console.log('[Whoop] promptAsync result:', JSON.stringify(result))
     if (result.type !== 'success') return
     try {
-      const tokenRes = await fetch(discovery.tokenEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          grant_type: 'authorization_code',
-          client_id: CLIENT_ID,
-          client_secret: CLIENT_SECRET,
-          code: result.params.code,
-          redirect_uri: redirectUri,
-          code_verifier: request!.codeVerifier!,
-        }).toString(),
+      // Exchange goes through the whoop-proxy edge function: Whoop's token
+      // endpoint has no CORS headers, and the client secret lives server-side.
+      const ok = await exchangeWhoopCode({
+        code: result.params.code,
+        redirect_uri: redirectUri,
+        code_verifier: request!.codeVerifier!,
       })
-      const tokenBody = await tokenRes.text()
-      console.log('[Whoop] token status:', tokenRes.status, tokenBody)
-      if (!tokenRes.ok) return
-      const tokens = JSON.parse(tokenBody)
-      if (!tokens?.access_token || !tokens?.refresh_token) return
-      await saveWhoopTokens(tokens)
+      if (!ok) return
       // Create the Supabase users row now that we have a Whoop identity, so
       // food saves (which FK to users) work immediately.
       await syncUserRow()

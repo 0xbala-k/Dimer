@@ -50,8 +50,12 @@ Create a `.env` file in the project root:
 EXPO_PUBLIC_SUPABASE_URL=https://<your-project>.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
 EXPO_PUBLIC_WHOOP_CLIENT_ID=<your-whoop-client-id>
-EXPO_PUBLIC_WHOOP_CLIENT_SECRET=<your-whoop-client-secret>
 ```
+
+The Whoop client secret is NOT a client env var: it lives server-side on the
+`whoop-proxy` edge function (see step 3), which handles the OAuth token
+exchange and API reads — Whoop's API sends no CORS headers, so the browser
+can't call it directly.
 
 ### 3. Supabase schema
 
@@ -66,6 +70,7 @@ Deploy the edge functions:
 ```bash
 supabase functions deploy food-analyze
 supabase functions deploy restaurant-search
+supabase functions deploy whoop-proxy
 ```
 
 Set secrets on the edge functions:
@@ -73,6 +78,8 @@ Set secrets on the edge functions:
 ```bash
 supabase secrets set ANTHROPIC_API_KEY=<key>
 supabase secrets set SPOONACULAR_API_KEY=<key>
+supabase secrets set WHOOP_CLIENT_ID=<your-whoop-client-id>
+supabase secrets set WHOOP_CLIENT_SECRET=<your-whoop-client-secret>
 ```
 
 ### 4. Whoop OAuth redirect URI
