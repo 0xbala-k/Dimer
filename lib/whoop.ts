@@ -1,6 +1,7 @@
 import { storage } from './storage'
 import { supabase } from './supabase'
 import type { WhoopData } from './types'
+import { summarizeCycles, type CycleRecord } from './whoopCycles'
 
 export const DISCOVERY = {
   authorizationEndpoint: 'https://api.prod.whoop.com/oauth/oauth2/auth',
@@ -141,15 +142,7 @@ export async function fetchTodayWhoopData(): Promise<WhoopData> {
 
   const res = await whoopGet(`/cycle?start=${start}&end=${end}`)
   if (!res.ok) throw new Error(`Whoop API error: ${res.status}`)
-  const data = res.data
 
-  const cycles: { score?: { kilojoule?: number; strain?: number } }[] = data.records ?? []
-
-  const totalKj = cycles.reduce((sum, c) => sum + (c.score?.kilojoule ?? 0), 0)
-  const burned = Math.round(totalKj / 4.184)
-
-  const latest = cycles[cycles.length - 1]
-  const strain = latest?.score?.strain ?? null
-
-  return { burned, strain, recovery: null }
+  const cycles: CycleRecord[] = res.data.records ?? []
+  return summarizeCycles(cycles)
 }
