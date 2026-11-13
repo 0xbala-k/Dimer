@@ -16,6 +16,7 @@ import { Inter_500Medium, Inter_600SemiBold } from '@expo-google-fonts/inter'
 import { getValidAccessToken } from '../lib/whoop'
 import { ensureSession, syncUserRow } from '../lib/auth'
 import { colors } from '../lib/theme'
+import { withTimeout } from '../lib/date'
 import { View } from 'react-native'
 
 WebBrowser.maybeCompleteAuthSession()
@@ -43,7 +44,9 @@ export default function RootLayout() {
       const token = await getValidAccessToken()
       if (token) await syncUserRow()
     }
-    bootstrap()
+    // Cap the wait: if Supabase is unreachable (e.g. the project is paused),
+    // render anyway so screens can show an error instead of a blank page.
+    withTimeout(bootstrap(), 12_000, 'bootstrap_timeout')
       .catch((e) => console.error('[bootstrap] failed:', e))
       .finally(() => setAuthChecked(true))
   }, [])

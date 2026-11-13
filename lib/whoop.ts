@@ -2,6 +2,7 @@ import { storage } from './storage'
 import { supabase } from './supabase'
 import type { WhoopData } from './types'
 import { summarizeCycles, type CycleRecord } from './whoopCycles'
+import { localDayBounds, withTimeout } from './date'
 
 export const DISCOVERY = {
   authorizationEndpoint: 'https://api.prod.whoop.com/oauth/oauth2/auth',
@@ -21,10 +22,34 @@ const KEYS = {
  * the client secret server-side. It always responds 200 with Whoop's real
  * { status, body } tucked inside.
  */
+const PROXY_TIMEOUT_MS = 15_000
+
 async function whoopProxy(body: object): Promise<{ status: number; body: any } | null> {
-  const { data, error } = await supabase.functions.invoke('whoop-proxy', { body })
-  if (error || typeof data?.status !== 'number') return null
-  return data as { status: number; body: any }
+  try {
+    // Bounded: an unreachable Supabase project (e.g. paused) must not leave
+    // the app stuck on a blank screen waiting for this call.
+    const { data, error } = await withTimeout(
+      supabase.functions.invoke('whoop-proxy', { body }),
+      PROXY_TIMEOUT_MS,
+      'whoop_proxy_timeout',
+    )
+    if (error || typeof data?.status !== 'number') {
+      console.error('[Whoop] proxy failed:', error ?? data)
+      return null
+    }
+    return data as { status: number; body: any }
+  } catch (e) {
+    console.error('[Whoop] proxy failed:', e)
+    return null
+  }
+}
+
+/** Thrown when Whoop rejects our tokens; the fix is to reconnect Whoop. */
+export class WhoopAuthError extends Error {
+  constructor(message = 'whoop_auth') {
+    super(message)
+    this.name = 'WhoopAuthError'
+  }
 }
 
 export async function saveWhoopTokens(params: {
@@ -53,20 +78,31 @@ export async function clearWhoopTokens() {
  * Exchanges an authorization code for tokens (via the proxy, which adds the
  * client credentials) and persists them. Returns whether login succeeded.
  */
+export type ExchangeResult =
+  | { ok: true }
+  | { ok: false; reason: 'proxy_unreachable' | 'whoop_rejected' | 'missing_secrets'; detail?: string }
+
 export async function exchangeWhoopCode(params: {
   code: string
   redirect_uri: string
   code_verifier: string
-}): Promise<boolean> {
+}): Promise<ExchangeResult> {
   const res = await whoopProxy({
     action: 'token',
     params: { grant_type: 'authorization_code', ...params },
   })
   console.log('[Whoop] token status:', res?.status ?? 'proxy failed')
-  const tokens = res?.status === 200 ? res.body : null
-  if (!tokens?.access_token || !tokens?.refresh_token) return false
+  if (!res) return { ok: false, reason: 'proxy_unreachable' }
+  if (res.body?.error === 'missing_whoop_secrets') return { ok: false, reason: 'missing_secrets' }
+  const tokens = res.status === 200 ? res.body : null
+  if (!tokens?.access_token || !tokens?.refresh_token) {
+    const detail = typeof res.body === 'object'
+      ? res.body?.error_description ?? res.body?.error
+      : undefined
+    return { ok: false, reason: 'whoop_rejected', detail: detail ? String(detail) : `HTTP ${res.status}` }
+  }
   await saveWhoopTokens(tokens)
-  return true
+  return { ok: true }
 }
 
 /**
@@ -108,7 +144,10 @@ async function _getValidAccessToken(): Promise<string | null> {
       action: 'token',
       params: { grant_type: 'refresh_token', refresh_token: refreshToken },
     })
-    if (!res || res.status !== 200) return null
+    if (!res || res.status !== 200) {
+      console.log('[Whoop] refresh failed:', res?.status ?? 'proxy failed')
+      return null
+    }
     const data = res.body
     if (!data?.access_token) return null
     await saveWhoopTokens(data)
@@ -129,18 +168,18 @@ export function getValidAccessToken(): Promise<string | null> {
 
 async function whoopGet(path: string): Promise<{ ok: boolean; status: number; data: any }> {
   const token = await getValidAccessToken()
-  if (!token) throw new Error('no_token')
+  if (!token) throw new WhoopAuthError('no_token')
   const res = await whoopProxy({ action: 'api', path, access_token: token })
   if (!res) throw new Error('proxy_failed')
+  if (res.status === 401) throw new WhoopAuthError()
   return { ok: res.status >= 200 && res.status < 300, status: res.status, data: res.body }
 }
 
 export async function fetchTodayWhoopData(): Promise<WhoopData> {
-  const today = new Date().toISOString().split('T')[0]
-  const start = `${today}T00:00:00.000Z`
-  const end = `${today}T23:59:59.999Z`
+  // Local day, not the UTC day: the UTC date flips mid-afternoon in California.
+  const { start, end } = localDayBounds()
 
-  const res = await whoopGet(`/cycle?start=${start}&end=${end}`)
+  const res = await whoopGet(`/cycle?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`)
   if (!res.ok) throw new Error(`Whoop API error: ${res.status}`)
 
   const cycles: CycleRecord[] = res.data.records ?? []

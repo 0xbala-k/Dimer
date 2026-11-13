@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import type { FoodLog } from '../lib/types'
+import { localDateString } from '../lib/date'
 
 function todayDate() {
-  return new Date().toISOString().split('T')[0]
+  return localDateString()
 }
 
 let channelCounter = 0
@@ -11,6 +12,7 @@ let channelCounter = 0
 export function useFoodLog() {
   const [logs, setLogs] = useState<FoodLog[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const channelName = useRef(`food_logs_today_${++channelCounter}`).current
 
   const fetchLogs = useCallback(async () => {
@@ -20,7 +22,13 @@ export function useFoodLog() {
       .select('*')
       .eq('date', todayDate())
       .order('logged_at', { ascending: false })
-    if (!error && data) setLogs(data as FoodLog[])
+    if (error) {
+      console.error('[useFoodLog] fetch failed:', error)
+      setError(error.message || 'Could not load your food log')
+    } else {
+      setError(null)
+      if (data) setLogs(data as FoodLog[])
+    }
     setLoading(false)
   }, [])
 
@@ -54,5 +62,5 @@ export function useFoodLog() {
     await supabase.from('food_logs').delete().eq('id', id)
   }
 
-  return { logs, loading, totalCalories, refetch: fetchLogs, deleteLog }
+  return { logs, loading, error, totalCalories, refetch: fetchLogs, deleteLog }
 }

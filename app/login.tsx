@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
@@ -14,6 +15,8 @@ const WHOOP_SCOPES = ['offline', 'read:cycles', 'read:body_measurement', 'read:p
 export default function LoginScreen() {
   const redirectUri = AuthSession.makeRedirectUri({ scheme: 'dimer', path: 'auth/callback' })
   const discovery = DISCOVERY
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
 
   const [request, , promptAsync] = AuthSession.useAuthRequest(
     {
@@ -28,24 +31,43 @@ export default function LoginScreen() {
   async function handleConnect() {
     console.log('[Whoop] redirect_uri:', redirectUri)
     console.log('[Whoop] request ready:', !!request)
+    setError(null)
     const result = await promptAsync()
     console.log('[Whoop] promptAsync result:', JSON.stringify(result))
+    if (result.type === 'error') {
+      // e.g. redirect_uri not registered in the Whoop developer dashboard
+      setError(`Whoop returned an error: ${result.params?.error_description ?? result.params?.error ?? 'unknown'}`)
+      return
+    }
     if (result.type !== 'success') return
+    setBusy(true)
     try {
       // Exchange goes through the whoop-proxy edge function: Whoop's token
       // endpoint has no CORS headers, and the client secret lives server-side.
-      const ok = await exchangeWhoopCode({
+      const res = await exchangeWhoopCode({
         code: result.params.code,
         redirect_uri: redirectUri,
         code_verifier: request!.codeVerifier!,
       })
-      if (!ok) return
+      if (!res.ok) {
+        setError(
+          res.reason === 'proxy_unreachable'
+            ? "Couldn't reach the Dimer server. Check that the Supabase project is running and whoop-proxy is deployed."
+            : res.reason === 'missing_secrets'
+              ? 'The server is missing its Whoop client id or secret.'
+              : `Whoop rejected the sign-in (${res.detail}). Check the client secret and redirect URI.`,
+        )
+        return
+      }
       // Create the Supabase users row now that we have a Whoop identity, so
       // food saves (which FK to users) work immediately.
       await syncUserRow()
       router.replace('/dashboard')
     } catch (e) {
       console.log('[Whoop] token exchange error:', e)
+      setError('Sign-in failed. Try again.')
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -91,10 +113,12 @@ export default function LoginScreen() {
           <Pressable
             style={({ pressed }) => [s.cta, pressed && { opacity: 0.85 }]}
             onPress={handleConnect}
+            disabled={busy}
             accessibilityLabel="Connect with Whoop"
           >
-            <Text style={s.ctaText}>Connect with Whoop →</Text>
+            <Text style={s.ctaText}>{busy ? 'Connecting…' : 'Connect with Whoop →'}</Text>
           </Pressable>
+          {error && <Text style={s.error}>{error}</Text>}
           <Text style={s.ctaSub}>Requires Whoop 4.0+ · OAuth 2.0 PKCE</Text>
         </View>
       </View>
@@ -125,5 +149,6 @@ const s = StyleSheet.create({
     shadowRadius: 12,
   },
   ctaText: { fontFamily: fonts.labelSemiBold, fontSize: 14, color: colors.bg, letterSpacing: 1, textTransform: 'uppercase' },
+  error: { fontFamily: fonts.label, fontSize: 12, color: colors.danger, textAlign: 'center', lineHeight: 18 },
   ctaSub: { fontFamily: fonts.label, fontSize: 11, color: colors.textDim, textAlign: 'center' },
 })

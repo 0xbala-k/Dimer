@@ -8,9 +8,9 @@ export default function Index() {
   const [dest, setDest] = useState<'/dashboard' | '/login' | null>(null)
 
   useEffect(() => {
-    getValidAccessToken().then((token) => {
-      setDest(token ? '/dashboard' : '/login')
-    })
+    getValidAccessToken()
+      .then((token) => setDest(token ? '/dashboard' : '/login'))
+      .catch(() => setDest('/login'))
   }, [])
 
   if (!dest) return <View style={{ flex: 1, backgroundColor: colors.bg }} />

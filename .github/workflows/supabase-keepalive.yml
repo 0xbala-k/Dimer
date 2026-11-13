@@ -1,0 +1,41 @@
+# Keeps the free-tier Supabase project from auto-pausing.
+#
+# Supabase pauses free projects after about a week without database activity,
+# which takes down food logging and the whoop-proxy edge function (so Whoop
+# sign-in and data stop working too). This makes one tiny read every 3 days.
+#
+# Needs two repository secrets (Settings → Secrets and variables → Actions):
+#   SUPABASE_URL       same value as EXPO_PUBLIC_SUPABASE_URL
+#   SUPABASE_ANON_KEY  same value as EXPO_PUBLIC_SUPABASE_ANON_KEY
+name: Supabase keep-alive
+
+on:
+  schedule:
+    - cron: '17 15 */3 * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Query the database
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::Set the SUPABASE_URL and SUPABASE_ANON_KEY repository secrets."
+            exit 1
+          fi
+          status=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            "$SUPABASE_URL/rest/v1/food_logs?select=id&limit=1")
+          echo "Supabase responded HTTP $status"
+          if [ "$status" -ge 400 ]; then
+            echo "::error::Supabase returned HTTP $status. The project may be paused; restore it in the dashboard."
+            exit 1
+          fi
