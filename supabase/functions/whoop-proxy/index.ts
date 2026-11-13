@@ -16,7 +16,9 @@ const CORS = {
 }
 
 const TOKEN_ENDPOINT = 'https://api.prod.whoop.com/oauth/oauth2/token'
-const API_BASE = 'https://api.prod.whoop.com/developer/v1'
+// WHOOP retired the v1 developer API (support ended Oct 1, 2025); the current
+// OpenAPI spec only serves v2. Cycle and basic-profile shapes are unchanged.
+const API_BASE = 'https://api.prod.whoop.com/developer/v2'
 const TOKEN_PARAMS = ['grant_type', 'code', 'redirect_uri', 'code_verifier', 'refresh_token']
 
 function json(payload: unknown, status = 200): Response {
@@ -52,8 +54,20 @@ serve(async (req) => {
         const value = params?.[key]
         if (typeof value === 'string') form.set(key, value)
       }
-      form.set('client_id', Deno.env.get('WHOOP_CLIENT_ID') ?? '')
-      form.set('client_secret', Deno.env.get('WHOOP_CLIENT_SECRET') ?? '')
+      // WHOOP's refresh example sends scope=offline so the response carries a
+      // new refresh token (WHOOP rotates it on every refresh).
+      if (form.get('grant_type') === 'refresh_token' && !form.has('scope')) {
+        form.set('scope', 'offline')
+      }
+      const clientId = Deno.env.get('WHOOP_CLIENT_ID')
+      const clientSecret = Deno.env.get('WHOOP_CLIENT_SECRET')
+      if (!clientId || !clientSecret) {
+        // Surface missing secrets instead of sending blanks to WHOOP and
+        // getting an opaque invalid_client back.
+        return json({ status: 500, body: { error: 'missing_whoop_secrets' } })
+      }
+      form.set('client_id', clientId)
+      form.set('client_secret', clientSecret)
 
       const res = await fetch(TOKEN_ENDPOINT, {
         method: 'POST',

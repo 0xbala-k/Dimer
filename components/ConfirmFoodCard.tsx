@@ -7,6 +7,7 @@ import { ensureSession } from '../lib/auth'
 import { colors, fonts, radii, spacing } from '../lib/theme'
 import { GlassCard } from './GlassCard'
 import type { FoodResult } from '../lib/types'
+import { localDateString } from '../lib/date'
 
 // Exported for unit testing
 export function scaleByServing(
@@ -64,7 +65,7 @@ export function ConfirmFoodCard({ result, inputMethod, onSaved, onRetake }: Prop
   async function handleSave() {
     setSaving(true)
     try {
-      const today = new Date().toISOString().split('T')[0]
+      const today = localDateString()
       const userId = await ensureSession()
       const { error } = await supabase.from('food_logs').insert({
         user_id: userId,

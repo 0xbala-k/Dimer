@@ -2,6 +2,7 @@ import { useRef, useCallback } from 'react'
 import { haptics, ImpactFeedbackStyle } from '../../../lib/haptics'
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { router } from 'expo-router'
 import type BottomSheet from '@gorhom/bottom-sheet'
 import { DeficitRing } from '../../../components/DeficitRing'
 import { MacroBar } from '../../../components/MacroBar'
@@ -16,8 +17,8 @@ import { colors, fonts, spacing } from '../../../lib/theme'
 
 export default function DashboardScreen() {
   const sheetRef = useRef<BottomSheet>(null)
-  const { data: whoopData, loading: whoopLoading } = useWhoopData()
-  const { logs, totalCalories } = useFoodLog()
+  const { data: whoopData, loading: whoopLoading, error: whoopError, needsReconnect, refetch: refetchWhoop } = useWhoopData()
+  const { logs, totalCalories, error: logError, refetch: refetchLogs } = useFoodLog()
   const deficit = useDeficit(whoopData?.burned ?? 0, logs)
 
   const burned = whoopData?.burned ?? 0
@@ -35,6 +36,27 @@ export default function DashboardScreen() {
           </View>
           <WhoopBadge strain={whoopData?.strain ?? null} recovery={whoopData?.recovery ?? null} />
         </View>
+
+        {(whoopError || logError) && (
+          <GlassCard style={s.errorCard}>
+            <Text style={s.errorTitle}>
+              {needsReconnect ? 'Whoop needs reconnecting' : "Some data didn't load"}
+            </Text>
+            {whoopError && !needsReconnect && (
+              <Text style={s.errorText}>Whoop: {whoopError}</Text>
+            )}
+            {logError && <Text style={s.errorText}>Food log: {logError}</Text>}
+            <Pressable
+              style={({ pressed }) => [s.errorBtn, pressed && { opacity: 0.85 }]}
+              onPress={() => {
+                if (needsReconnect) router.replace('/login')
+                else { refetchWhoop(); refetchLogs() }
+              }}
+            >
+              <Text style={s.errorBtnText}>{needsReconnect ? 'Reconnect Whoop' : 'Retry'}</Text>
+            </Pressable>
+          </GlassCard>
+        )}
 
         <View style={s.ringWrap}>
           <DeficitRing burned={burned} consumed={consumed} />
@@ -113,6 +135,11 @@ const s = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: spacing.xl, paddingBottom: spacing.md },
   day: { fontFamily: fonts.display, fontSize: 24, color: colors.text },
   date: { fontFamily: fonts.label, fontSize: 10, color: colors.textDim, letterSpacing: 1.5, marginTop: 2 },
+  errorCard: { marginHorizontal: spacing.lg, marginBottom: spacing.md, gap: 6, borderColor: colors.danger },
+  errorTitle: { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.danger },
+  errorText: { fontFamily: fonts.label, fontSize: 11, color: colors.text, opacity: 0.7 },
+  errorBtn: { alignSelf: 'flex-start', marginTop: 4, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, backgroundColor: colors.danger },
+  errorBtnText: { fontFamily: fonts.labelSemiBold, fontSize: 11, color: colors.bg, letterSpacing: 0.5 },
   ringWrap: { alignItems: 'center', paddingBottom: spacing.lg },
   burnConsumed: { flexDirection: 'row', gap: 24, marginTop: spacing.sm },
   bcItem: { alignItems: 'center' },
