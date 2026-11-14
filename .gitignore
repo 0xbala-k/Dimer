@@ -4,6 +4,7 @@ node_modules/
 .expo/
 dist/
 .env
+supabase/.temp/
 ios/
 android/
 
