@@ -7,6 +7,8 @@ import type { FoodResult } from '../lib/types'
 
 interface Props {
   onResult: (result: FoodResult) => void
+  /** Used by the web scanner to stop the camera when the sheet closes; unused on native. */
+  active?: boolean
 }
 
 export function BarcodeInput({ onResult }: Props) {

@@ -1,121 +1,116 @@
 import { useEffect, useRef, useState, createElement } from 'react'
 import { View, Text, Pressable, TextInput, ActivityIndicator, StyleSheet } from 'react-native'
+import type { ScannerControls } from '../lib/barcodeScanner.web'
 import { lookupBarcode, barcodeStyles as sb } from './barcodeShared'
-import { showAlert } from '../lib/alert'
+import { cameraErrorMessage } from '../lib/barcode'
 import { colors, fonts, radii } from '../lib/theme'
 import type { FoodResult } from '../lib/types'
 
 interface Props {
   onResult: (result: FoodResult) => void
+  /** False while the Log Food sheet is closed; stops the camera. */
+  active?: boolean
 }
 
-// BarcodeDetector is not in this project's lib.dom types — declare a minimal shape.
-type BarcodeDetectorLike = {
-  detect(source: HTMLVideoElement): Promise<{ rawValue: string }[]>
-}
-
-const BARCODE_FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code']
-const SCAN_INTERVAL_MS = 200
 const VIDEO_STYLE = { width: '100%', height: '100%', objectFit: 'cover' } as const
 
-function scannerSupported(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    'BarcodeDetector' in window &&
-    typeof navigator !== 'undefined' &&
-    !!navigator.mediaDevices?.getUserMedia
-  )
+function cameraAvailable(): boolean {
+  return typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia
 }
 
-export function BarcodeInput({ onResult }: Props) {
+/**
+ * Starts the camera scanner (see lib/barcodeScanner.web.ts). The module is
+ * loaded on demand, so the decoder is only downloaded when the user taps Scan.
+ */
+async function startScanner(video: HTMLVideoElement, onCode: (code: string) => void): Promise<ScannerControls> {
+  const scanner = await import('../lib/barcodeScanner.web')
+  return scanner.startScanner(video, onCode)
+}
+
+export function BarcodeInput({ onResult, active = true }: Props) {
   const [scanning, setScanning] = useState(false)
+  const [starting, setStarting] = useState(false)
   const [loading, setLoading] = useState(false)
   const [manual, setManual] = useState('')
+  const [cameraError, setCameraError] = useState<string | null>(null)
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
-  const streamRef = useRef<MediaStream | null>(null)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // True while a detected code is being looked up: pauses detection without
-  // killing the scan loop, so a failed lookup resumes scanning.
+  // True while a code is being looked up: ignores further hits without
+  // stopping the camera, so a not-found result resumes scanning.
   const busyRef = useRef(false)
+  const onResultRef = useRef(onResult)
+  onResultRef.current = onResult
 
-  const supported = scannerSupported()
+  const canScan = cameraAvailable()
 
-  function stopCamera() {
-    if (timerRef.current !== null) {
-      clearTimeout(timerRef.current)
-      timerRef.current = null
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop())
-      streamRef.current = null
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null
-    }
+  // Closing the sheet stops the camera.
+  useEffect(() => {
+    if (!active) setScanning(false)
+  }, [active])
+
+  // Runs the camera while `scanning` is true. The cleanup stops it on cancel,
+  // success, sheet close, tab switch and unmount.
+  useEffect(() => {
+    if (!scanning) return
+    const video = videoRef.current
+    if (!video) return
+
+    let cancelled = false
+    let controls: ScannerControls | null = null
     busyRef.current = false
-  }
+    setStarting(true)
 
-  // Cleanup on unmount.
-  useEffect(() => stopCamera, [])
-
-  function handleSuccess(result: FoodResult) {
-    stopCamera()
-    setScanning(false)
-    onResult(result)
-  }
-
-  async function handleOpen() {
-    setScanning(true)
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-      streamRef.current = stream
-      const video = videoRef.current
-      if (!video) {
-        stream.getTracks().forEach((t) => t.stop())
-        streamRef.current = null
-        setScanning(false)
-        return
-      }
-      video.srcObject = stream
-      video.setAttribute('playsinline', 'true')
-      await video.play()
-
-      const detector: BarcodeDetectorLike = new (window as any).BarcodeDetector({ formats: BARCODE_FORMATS })
-
-      const tick = async () => {
-        // Camera was stopped (cancel/success/unmount) — end the loop.
-        if (!streamRef.current || !videoRef.current) return
-        if (!busyRef.current) {
-          try {
-            const codes = await detector.detect(videoRef.current)
-            if (codes.length > 0 && !busyRef.current) {
-              busyRef.current = true
-              setLoading(true)
-              await lookupBarcode(codes[0].rawValue, handleSuccess, () => {
-                busyRef.current = false
-              })
-              setLoading(false)
-            }
-          } catch {
-            // Transient decode errors are expected between frames — keep polling.
-          }
+    function handleCode(code: string) {
+      if (cancelled || busyRef.current) return
+      busyRef.current = true
+      setLoading(true)
+      lookupBarcode(
+        code,
+        (result) => {
+          if (cancelled) return
+          setScanning(false)
+          onResultRef.current(result)
+        },
+        () => {
+          busyRef.current = false
         }
-        // Always reschedule while the camera runs, so not-found / failed
-        // lookups resume scanning instead of freezing the scanner.
-        timerRef.current = setTimeout(tick, SCAN_INTERVAL_MS)
-      }
-      timerRef.current = setTimeout(tick, SCAN_INTERVAL_MS)
-    } catch {
-      showAlert('Camera unavailable', 'Could not access the camera. Enter the barcode number below instead.')
-      stopCamera()
-      setScanning(false)
+      ).finally(() => {
+        if (!cancelled) setLoading(false)
+      })
     }
-  }
 
-  function handleCancel() {
-    stopCamera()
-    setScanning(false)
+    startScanner(video, handleCode)
+      .then((c) => {
+        if (cancelled) {
+          c.stop()
+          return
+        }
+        controls = c
+        setStarting(false)
+      })
+      .catch((error) => {
+        if (cancelled) return
+        setCameraError(cameraErrorMessage(error))
+        setStarting(false)
+        setScanning(false)
+      })
+
+    return () => {
+      cancelled = true
+      controls?.stop()
+      // Belt and braces: release the stream even if the scanner has not finished starting.
+      const stream = video.srcObject as MediaStream | null
+      stream?.getTracks().forEach((t) => t.stop())
+      video.srcObject = null
+      busyRef.current = false
+      setStarting(false)
+      setLoading(false)
+    }
+  }, [scanning])
+
+  function handleOpen() {
+    setCameraError(null)
+    setScanning(true)
   }
 
   async function handleManualSubmit() {
@@ -124,9 +119,16 @@ export function BarcodeInput({ onResult }: Props) {
     // Pause live detection (if the scanner is open) while this lookup runs.
     busyRef.current = true
     setLoading(true)
-    await lookupBarcode(value, handleSuccess, () => {
-      busyRef.current = false
-    })
+    await lookupBarcode(
+      value,
+      (result) => {
+        setScanning(false)
+        onResult(result)
+      },
+      () => {
+        busyRef.current = false
+      }
+    )
     setLoading(false)
   }
 
@@ -141,31 +143,38 @@ export function BarcodeInput({ onResult }: Props) {
             playsInline: true,
             style: VIDEO_STYLE,
           })}
-          {loading && (
+          {(starting || loading) && (
             <View style={sb.overlay}>
               <ActivityIndicator color={colors.primary} size="large" />
-              <Text style={sb.overlayText}>Looking up barcode…</Text>
+              <Text style={sb.overlayText}>{loading ? 'Looking up barcode…' : 'Starting camera…'}</Text>
             </View>
           )}
           <View style={sb.frame} />
-          <Pressable style={sb.cancelBtn} onPress={handleCancel}>
+          <Pressable style={sb.cancelBtn} onPress={() => setScanning(false)}>
             <Text style={sb.cancelText}>Cancel</Text>
           </Pressable>
         </View>
       ) : (
         <>
           <Text style={sb.hint}>Scan a product barcode to get nutrition data from Open Food Facts (free, no API key).</Text>
-          {supported && (
-            <Pressable style={({ pressed }) => [sb.btn, pressed && { opacity: 0.85 }]} onPress={handleOpen}>
-              <Text style={sb.btnText}>Open Scanner →</Text>
+          {canScan ? (
+            <Pressable
+              style={({ pressed }) => [sb.btn, pressed && { opacity: 0.85 }]}
+              onPress={handleOpen}
+              accessibilityLabel="Scan barcode with camera"
+            >
+              <Text style={sb.btnText}>Scan with Camera →</Text>
             </Pressable>
+          ) : (
+            <Text style={s.warning}>Camera scanning isn't available in this browser. Open the app over HTTPS, or enter the number below.</Text>
           )}
+          {cameraError && <Text style={s.warning}>{cameraError}</Text>}
         </>
       )}
 
       <View style={s.manualBlock}>
         <Text style={s.manualLabel}>
-          {supported ? 'Or enter the barcode number manually.' : 'Enter the barcode number manually.'}
+          {canScan ? 'Or enter the barcode number manually.' : 'Enter the barcode number manually.'}
         </Text>
         <View style={s.manualRow}>
           <TextInput
@@ -197,6 +206,7 @@ export function BarcodeInput({ onResult }: Props) {
 
 const s = StyleSheet.create({
   container: { gap: 16, padding: 4 },
+  warning: { fontFamily: fonts.label, fontSize: 12, color: colors.danger, lineHeight: 18 },
   manualBlock: { gap: 8 },
   manualLabel: { fontFamily: fonts.label, fontSize: 12, color: colors.textMuted },
   manualRow: { flexDirection: 'row', gap: 8, alignItems: 'stretch' },

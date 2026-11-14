@@ -22,6 +22,9 @@ const TABS: { id: Tab; label: string }[] = [
 export const AddFoodSheet = forwardRef<BottomSheet>((_, ref) => {
   const [activeTab, setActiveTab] = useState<Tab>('photo')
   const [pendingResult, setPendingResult] = useState<FoodResult | null>(null)
+  // Tracks whether the sheet is showing; the sheet stays mounted while closed,
+  // so the web barcode scanner uses this to stop the camera on close.
+  const [sheetOpen, setSheetOpen] = useState(false)
 
   const handleResult = useCallback((result: FoodResult) => {
     setPendingResult(result)
@@ -43,6 +46,7 @@ export const AddFoodSheet = forwardRef<BottomSheet>((_, ref) => {
       index={-1}
       snapPoints={['75%', '92%']}
       enablePanDownToClose
+      onChange={(index) => setSheetOpen(index >= 0)}
       backgroundStyle={{ backgroundColor: colors.sheet }}
       handleIndicatorStyle={{ backgroundColor: colors.cardBorder, width: 36 }}
     >
@@ -81,7 +85,7 @@ export const AddFoodSheet = forwardRef<BottomSheet>((_, ref) => {
             {activeTab === 'photo' && <PhotoInput onResult={handleResult} />}
             {activeTab === 'text' && <TextFoodInput onResult={handleResult} />}
             {activeTab === 'restaurant' && <RestaurantSearch onResult={handleResult} />}
-            {activeTab === 'barcode' && <BarcodeInput onResult={handleResult} />}
+            {activeTab === 'barcode' && <BarcodeInput onResult={handleResult} active={sheetOpen} />}
           </>
         )}
       </BottomSheetScrollView>
