@@ -3,11 +3,13 @@ import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native'
 import { haptics, NotificationFeedbackType } from '../lib/haptics'
 import { showAlert } from '../lib/alert'
 import { supabase } from '../lib/supabase'
-import { ensureSession } from '../lib/auth'
+import { ensureUserRow } from '../lib/auth'
 import { colors, fonts, radii, spacing } from '../lib/theme'
 import { GlassCard } from './GlassCard'
 import type { FoodResult } from '../lib/types'
 import { localDateString } from '../lib/date'
+import { roundNutrition } from '../lib/nutrition'
+import { saveErrorMessage } from '../lib/saveError'
 
 // Exported for unit testing
 export function scaleByServing(
@@ -45,14 +47,17 @@ interface EditableFields {
 export function ConfirmFoodCard({ result, inputMethod, onSaved, onRetake }: Props) {
   const DEFAULT_GRAMS = 100
   const [servingGrams, setServingGrams] = useState(DEFAULT_GRAMS)
-  const [fields, setFields] = useState<EditableFields>({
+  // Rounded up front so the card shows e.g. 0.8 g rather than 0.8050965834116 g.
+  const [fields, setFields] = useState<EditableFields>(() => ({
     name: result.name,
-    calories: result.calories,
-    protein: result.protein,
-    carbs: result.carbs,
-    fats: result.fats,
-    fiber: result.fiber,
-  })
+    ...roundNutrition({
+      calories: result.calories,
+      protein: result.protein,
+      carbs: result.carbs,
+      fats: result.fats,
+      fiber: result.fiber,
+    }),
+  }))
   const [saving, setSaving] = useState(false)
 
   function changeServing(delta: number) {
@@ -66,17 +71,19 @@ export function ConfirmFoodCard({ result, inputMethod, onSaved, onRetake }: Prop
     setSaving(true)
     try {
       const today = localDateString()
-      const userId = await ensureSession()
+      // food_logs.user_id references users(id): make sure that row exists.
+      const userId = await ensureUserRow()
+      const values = roundNutrition(fields)
       const { error } = await supabase.from('food_logs').insert({
         user_id: userId,
         date: today,
         source: inputMethod,
-        name: fields.name,
-        calories: fields.calories,
-        protein: fields.protein,
-        carbs: fields.carbs,
-        fats: fields.fats,
-        fiber: fields.fiber,
+        name: values.name.trim() || result.name,
+        calories: values.calories,
+        protein: values.protein,
+        carbs: values.carbs,
+        fats: values.fats,
+        fiber: values.fiber,
         raw_response: result as unknown as Record<string, unknown>,
       })
       if (error) throw error
@@ -88,18 +95,20 @@ export function ConfirmFoodCard({ result, inputMethod, onSaved, onRetake }: Prop
         .eq('date', today)
         .maybeSingle()
 
-      await supabase.from('daily_summaries').upsert({
+      const { error: summaryError } = await supabase.from('daily_summaries').upsert({
         user_id: userId,
         date: today,
-        calories_consumed: (existing?.calories_consumed ?? 0) + fields.calories,
+        calories_consumed: (existing?.calories_consumed ?? 0) + values.calories,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id,date' })
+      // The food entry is saved; a failed summary update shouldn't block that.
+      if (summaryError) console.error('[ConfirmFoodCard] daily summary update failed:', summaryError)
 
       haptics.notification(NotificationFeedbackType.Success)
       onSaved()
     } catch (e) {
       console.error('[ConfirmFoodCard] save failed:', e)
-      showAlert('Failed to save', 'Check your connection and try again.')
+      showAlert('Failed to save', saveErrorMessage(e))
     } finally {
       setSaving(false)
     }
