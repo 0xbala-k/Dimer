@@ -19,6 +19,26 @@ export async function ensureSession(): Promise<string> {
 }
 
 /**
+ * Makes sure the current session has a `users` row, which food_logs.user_id and
+ * daily_summaries.user_id reference. Without it every food insert fails with a
+ * foreign-key violation (Postgres 23503). syncUserRow only runs once Whoop is
+ * connected, so a fresh anonymous session (e.g. a newly installed PWA) would
+ * otherwise never be able to save.
+ *
+ * Inserts { id, whoop_user_id: id } only if no row exists yet (ON CONFLICT DO
+ * NOTHING), so an existing row's real Whoop id is never overwritten; syncUserRow
+ * fills in the real Whoop id later. Returns the user id.
+ */
+export async function ensureUserRow(): Promise<string> {
+  const userId = await ensureSession()
+  const { error } = await supabase
+    .from('users')
+    .upsert({ id: userId, whoop_user_id: userId }, { onConflict: 'id', ignoreDuplicates: true })
+  if (error) throw error
+  return userId
+}
+
+/**
  * Creates/updates the `users` row for the current session, keyed by auth.uid().
  * food_logs.user_id and daily_summaries.user_id reference users(id), so this row
  * must exist before any food can be saved. Requires a valid Whoop session to read
