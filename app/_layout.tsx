@@ -14,7 +14,7 @@ import { DMMono_400Regular, DMMono_500Medium } from '@expo-google-fonts/dm-mono'
 import { DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold } from '@expo-google-fonts/dm-sans'
 import { Inter_500Medium, Inter_600SemiBold } from '@expo-google-fonts/inter'
 import { getValidAccessToken } from '../lib/whoop'
-import { ensureSession, syncUserRow } from '../lib/auth'
+import { ensureSession, isWhoopLinked, linkWhoopAccount } from '../lib/auth'
 import { colors } from '../lib/theme'
 import { withTimeout } from '../lib/date'
 import { View } from 'react-native'
@@ -40,9 +40,13 @@ export default function RootLayout() {
     async function bootstrap() {
       // Anon Supabase session first — RLS needs auth.uid() to be non-null.
       await ensureSession()
-      // If already signed into Whoop, make sure the users row exists so saves work.
+      // If this device has Whoop but isn't on its Whoop account yet (e.g. it was
+      // set up before accounts were shared), link it now. This may switch the
+      // session to the account another device created, merging local entries.
       const token = await getValidAccessToken()
-      if (token) await syncUserRow()
+      if (token && !(await isWhoopLinked())) {
+        await linkWhoopAccount().catch((e) => console.error('[bootstrap] Whoop account link failed:', e))
+      }
     }
     // Cap the wait: if Supabase is unreachable (e.g. the project is paused),
     // render anyway so screens can show an error instead of a blank page.

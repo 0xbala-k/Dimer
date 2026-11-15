@@ -105,24 +105,6 @@ export async function exchangeWhoopCode(params: {
   return { ok: true }
 }
 
-/**
- * Returns the Whoop user id (as a string), fetching the basic profile once and
- * caching it in storage. Used as the NOT NULL whoop_user_id on the users row.
- */
-export async function fetchWhoopUserId(): Promise<string | null> {
-  const cached = await storage.getItem(KEYS.userId)
-  if (cached) return cached
-  try {
-    const res = await whoopGet('/user/profile/basic')
-    if (!res.ok) return null
-    const id = res.data?.user_id != null ? String(res.data.user_id) : null
-    if (id) await storage.setItem(KEYS.userId, id)
-    return id
-  } catch {
-    return null
-  }
-}
-
 let _authCheckPromise: Promise<string | null> | null = null
 
 async function _getValidAccessToken(): Promise<string | null> {

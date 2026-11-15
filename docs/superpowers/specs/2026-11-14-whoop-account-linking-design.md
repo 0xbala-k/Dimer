@@ -1,6 +1,6 @@
 # One account per Whoop user (cross-device account linking)
 
-Date: 2026-11-14 · Status: proposed
+Date: 2026-11-14 · Status: approved; implemented on `feat/whoop-account-linking`
 
 ## Intent
 
@@ -99,6 +99,10 @@ Request: `{ access_token: <Whoop access token> }`. Steps:
 3. **Find the owner.** Select `id` from `public.users` where
    `whoop_user_id = whoopId`, using the service role.
 4. **Decide:**
+   - **No owner, and the caller is linked to a different Whoop user**
+     (switching Whoop accounts on one device): don't re-point the caller's
+     account. Create a fresh account with the synthetic email, give it a
+     `users` row, and switch to it. No merge.
    - **No owner.** The caller claims the account. Upsert
      `users { id: callerId, whoop_user_id: whoopId }` (on conflict `id`, update
      `whoop_user_id`). Ensure the caller has the synthetic email (step 5).
@@ -154,7 +158,10 @@ Written to the repo. **Applied only with the user's go-ahead.**
      replaces the stored session.
   4. Store `dimer_linked_uid = <current auth uid>`.
 
-  It returns the outcome and throws on failure.
+  It returns the outcome and throws on failure. If the function answers
+  `not_signed_in`, the stored session's user no longer exists. That happens
+  if a merge removed it but redeeming the token failed. In that case it signs
+  out locally, starts a fresh anonymous session and retries once.
 - `app/login.tsx`: after a successful Whoop token exchange, call
   `linkWhoopAccount()` instead of `syncUserRow()`, then go to the dashboard.
 - `app/_layout.tsx` bootstrap: if a Whoop token exists and `dimer_linked_uid`
@@ -164,7 +171,7 @@ Written to the repo. **Applied only with the user's go-ahead.**
 - `syncUserRow` is removed (the edge function owns the Whoop id now).
   `ensureUserRow` stays for saving before Whoop is linked.
 
-### 4. Rollout (each step needs the user's OK)
+### 4. Rollout (each step needs the user's OK; commands in `docs/whoop-account-linking-rollout.md`)
 
 1. Apply migration 002.
 2. Deploy `whoop-signin`.

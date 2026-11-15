@@ -7,7 +7,7 @@ import * as WebBrowser from 'expo-web-browser'
 import Svg, { Circle, Path, Defs, LinearGradient, Stop } from 'react-native-svg'
 import { colors, fonts } from '../lib/theme'
 import { DISCOVERY, exchangeWhoopCode } from '../lib/whoop'
-import { syncUserRow } from '../lib/auth'
+import { linkWhoopAccount, LinkWhoopError } from '../lib/auth'
 
 const CLIENT_ID = process.env.EXPO_PUBLIC_WHOOP_CLIENT_ID!
 const WHOOP_SCOPES = ['offline', 'read:cycles', 'read:body_measurement', 'read:profile']
@@ -59,9 +59,19 @@ export default function LoginScreen() {
         )
         return
       }
-      // Create the Supabase users row now that we have a Whoop identity, so
-      // food saves (which FK to users) work immediately.
-      await syncUserRow()
+      // Put this device on the Dimer account for this Whoop user (creating it
+      // on first sign-in). Server-side: whoop-signin verifies the token with Whoop.
+      try {
+        await linkWhoopAccount()
+      } catch (e) {
+        console.log('[Whoop] account link error:', e)
+        setError(
+          e instanceof LinkWhoopError && e.code === 'unreachable'
+            ? "Couldn't reach the Dimer server to load your account. Check your connection and try again."
+            : "Connected to Whoop, but couldn't load your Dimer account. Try again.",
+        )
+        return
+      }
       router.replace('/dashboard')
     } catch (e) {
       console.log('[Whoop] token exchange error:', e)
