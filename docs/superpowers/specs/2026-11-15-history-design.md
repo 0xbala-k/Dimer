@@ -169,10 +169,10 @@ History            [ Week | Month ]
         ‹  Nov 9 – 15  ›
    2,340 kcal under · 6 of 7 days logged
  ─────────────────────────────────────
- Sat 15  in progress         420 under
- Fri 14                      180 over
- Thu 13                      610 under
- Wed 12  not logged              —
+ Sun 15  in progress         420 under
+  Sat 14                      180 over
+  Fri 13                      610 under
+ Thu 12  not logged              —
  ...
 ```
 
