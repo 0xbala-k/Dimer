@@ -28,8 +28,10 @@ opens after step 3.
 ## 1. Apply the migration
 
 ```sh
-supabase db push
+supabase db push --remote
 ```
+
+(Without `--remote`, CLI 3.x targets a local database.)
 
 The remote history already records `001`, so this applies only
 `002_merge_anonymous_account.sql`. It adds one function and changes no
@@ -49,6 +51,8 @@ select has_function_privilege('service_role',  'public.merge_anonymous_account(u
 ```sh
 supabase functions deploy whoop-signin
 ```
+
+Done 2026-11-15 (steps 1–2): 002 applied, `whoop-signin` v1 active.
 
 It needs no new secrets: `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are
 provided by the platform. `verify_jwt` stays at its default (on).
