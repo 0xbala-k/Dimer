@@ -94,6 +94,27 @@ describe('groupIntoDays', () => {
   })
 })
 
+describe('groupIntoDays stale open cycle', () => {
+  const t0 = '2026-11-10T08:00:00.000Z'
+  const t1 = '2026-11-11T08:00:00.000Z'
+  const t2 = '2026-11-12T08:00:00.000Z'
+  it('caps a stale open cycle at the next start and treats it as closed', () => {
+    const days = groupIntoDays(
+      [cycle(2, t1, t2, 2000), cycle(1, t0, null, 2500), cycle(3, t2, null, 1800)],
+      [log('a', '2026-11-10T09:00:00.000Z', 500), log('b', '2026-11-11T09:00:00.000Z', 300), log('c', '2026-11-12T09:00:00.000Z', 100)],
+      new Date('2026-11-12T20:00:00.000Z'),
+    )
+    const byKey = Object.fromEntries(days.map((d) => [d.key, d]))
+    expect(byKey['1'].logs.map((l) => l.id)).toEqual(['a'])
+    expect(byKey['1'].inProgress).toBe(false)
+    expect(byKey['1'].status).toBe('under')
+    expect(byKey['2'].logs.map((l) => l.id)).toEqual(['b'])
+    expect(byKey['3'].logs.map((l) => l.id)).toEqual(['c'])
+    expect(byKey['3'].status).toBe('in_progress')
+    expect(days.filter((d) => d.status === 'in_progress')).toHaveLength(1)
+  })
+})
+
 describe('periodTotal', () => {
   const mk = (status: Day['status'], net: number | null) => ({ status, net }) as Day
   it('sums only logged days', () => {

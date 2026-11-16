@@ -13,7 +13,15 @@ export function syncFromIso(
   now: Date,
 ): string {
   const t = (iso: string) => new Date(iso).getTime()
-  const unfinished = stored.filter((c) => c.end === null || c.score_state === 'PENDING_SCORE')
+  const newestStart = stored.length > 0 ? Math.max(...stored.map((c) => t(c.start))) : -Infinity
+  const cutoff = now.getTime() - 7 * DAY_MS
+  const unfinished = stored.filter((c) => {
+    const s = t(c.start)
+    if (s < cutoff) return false
+    // An open cycle followed by a newer stored one is stale, not unfinished.
+    if (c.end === null) return s >= newestStart
+    return c.score_state === 'PENDING_SCORE'
+  })
   if (unfinished.length > 0) {
     return new Date(Math.min(...unfinished.map((c) => t(c.start)))).toISOString()
   }
@@ -23,6 +31,13 @@ export function syncFromIso(
   const floor = now.getTime() - 30 * DAY_MS
   const from = earliestLogIso ? Math.max(t(earliestLogIso), floor) : floor
   return new Date(from).toISOString()
+}
+
+/** Dedupe by cycle_id, keeping the last occurrence (Postgres rejects a batch that hits one row twice). */
+export function dedupeByCycleId<T extends { cycle_id: number }>(rows: T[]): T[] {
+  const m = new Map<number, T>()
+  for (const r of rows) m.set(r.cycle_id, r)
+  return [...m.values()]
 }
 
 export async function fetchAllCyclesSince(
@@ -65,7 +80,9 @@ async function run(): Promise<void> {
     if (logRes.error) throw logRes.error
     const from = syncFromIso(storedRes.data ?? [], logRes.data?.[0]?.logged_at ?? null, new Date())
     const records = await fetchAllCyclesSince(from, fetchCyclesPage)
-    const rows = records.map((r) => toCycleRow(r, userId)).filter((r): r is WhoopCycleRow => r !== null)
+    const rows = dedupeByCycleId(
+      records.map((r) => toCycleRow(r, userId)).filter((r): r is WhoopCycleRow => r !== null),
+    )
     if (rows.length === 0) return
     const { error } = await supabase.from('whoop_cycles').upsert(rows, { onConflict: 'user_id,cycle_id' })
     if (error) throw error

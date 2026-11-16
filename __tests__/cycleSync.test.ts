@@ -2,7 +2,7 @@ jest.mock('../lib/supabase', () => ({ supabase: {} }))
 jest.mock('../lib/auth', () => ({ ensureUserRow: jest.fn() }))
 jest.mock('../lib/whoop', () => ({ fetchCyclesPage: jest.fn(), getValidAccessToken: jest.fn() }))
 
-import { syncFromIso, fetchAllCyclesSince } from '../lib/cycleSync'
+import { syncFromIso, fetchAllCyclesSince, dedupeByCycleId } from '../lib/cycleSync'
 import { toCycleRow } from '../lib/whoopCycles'
 
 const NOW = new Date('2026-07-14T12:00:00.000Z')
@@ -78,5 +78,36 @@ describe('fetchAllCyclesSince', () => {
     const fn = jest.fn().mockResolvedValue({ records: [], next_token: 't' })
     await fetchAllCyclesSince('s', fn)
     expect(fn).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('dedupeByCycleId', () => {
+  it('keeps the last occurrence of each cycle_id', () => {
+    const out = dedupeByCycleId([
+      { cycle_id: 1, v: 'a' }, { cycle_id: 2, v: 'b' }, { cycle_id: 1, v: 'c' },
+    ])
+    expect(out).toEqual([{ cycle_id: 1, v: 'c' }, { cycle_id: 2, v: 'b' }])
+  })
+})
+
+describe('syncFromIso stale rows', () => {
+  it('ignores unfinished rows older than 7 days', () => {
+    const stored = [
+      { start: ago(1), end: ago(0.5), score_state: 'SCORED' as const },
+      { start: ago(20), end: null, score_state: 'SCORED' as const },
+      { start: ago(10), end: ago(9), score_state: 'PENDING_SCORE' as const },
+    ]
+    expect(syncFromIso(stored, null, NOW)).toBe(ago(1))
+  })
+  it('an open cycle with a newer stored cycle is not unfinished', () => {
+    const stored = [
+      { start: ago(3), end: null, score_state: 'SCORED' as const },
+      { start: ago(1), end: ago(0.5), score_state: 'SCORED' as const },
+    ]
+    expect(syncFromIso(stored, null, NOW)).toBe(ago(1))
+  })
+  it('still resumes from a recent open latest cycle', () => {
+    const stored = [{ start: ago(2), end: null, score_state: 'SCORED' as const }]
+    expect(syncFromIso(stored, null, NOW)).toBe(ago(2))
   })
 })

@@ -54,12 +54,21 @@ function sumLogs(logs: FoodLog[]): { eaten: number; macros: MacroTotals } {
  * every cycle form fallback days keyed by local date.
  */
 export function groupIntoDays(cycles: WhoopCycleRow[], logs: FoodLog[], _now: Date = new Date()): Day[] {
-  const windows = cycles.map((c) => ({
-    c,
-    from: new Date(c.start).getTime(),
-    to: c.end ? new Date(c.end).getTime() : Infinity,
-    logs: [] as FoodLog[],
-  }))
+  const sorted = [...cycles].sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
+  const windows = sorted.map((c, i) => {
+    const next = sorted[i + 1]
+    const nextStart = next ? new Date(next.start).getTime() : Infinity
+    const end = c.end ? new Date(c.end).getTime() : Infinity
+    return {
+      c,
+      from: new Date(c.start).getTime(),
+      // An open cycle ends where the next one starts (it is stale if one exists).
+      to: c.end ? end : nextStart,
+      // Only the latest cycle can be in progress.
+      open: c.end === null && !next,
+      logs: [] as FoodLog[],
+    }
+  })
   const orphans = new Map<string, FoodLog[]>()
   for (const l of logs) {
     const t = new Date(l.logged_at).getTime()
@@ -71,9 +80,8 @@ export function groupIntoDays(cycles: WhoopCycleRow[], logs: FoodLog[], _now: Da
     }
   }
 
-  const days: Day[] = windows.map(({ c, logs: dl }) => {
+  const days: Day[] = windows.map(({ c, open, logs: dl }) => {
     const { eaten, macros } = sumLogs(dl)
-    const open = c.end === null
     let net: number | null = null
     let status: DayStatus
     if (open) {
