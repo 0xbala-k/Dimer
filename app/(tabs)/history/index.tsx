@@ -1,24 +1,36 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { View, Text, ScrollView, Pressable, RefreshControl, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { router } from 'expo-router'
+import { router, useFocusEffect } from 'expo-router'
 import { GlassCard } from '../../../components/GlassCard'
 import { useHistory } from '../../../hooks/useHistory'
 import { periodRange, shiftAnchor, type Period } from '../../../lib/days'
 import { localDateString } from '../../../lib/date'
-import { rangeHeader, rowLabel, amountText, statusTag, totalLine, visibleDays } from '../../../lib/historyFormat'
+import { rangeHeader, rowLabel, amountText, statusTag, totalLine } from '../../../lib/historyFormat'
 import { colors, fonts, spacing, radii } from '../../../lib/theme'
 
 export default function HistoryScreen() {
   const [period, setPeriod] = useState<Period>('week')
   const [anchor, setAnchor] = useState(() => new Date())
-  const { days, total, loading, error, refresh } = useHistory(period, anchor)
+  const { days, total, loading, error, refresh, reload } = useHistory(period, anchor)
   const [refreshing, setRefreshing] = useState(false)
+
+  // True while the user is viewing the current period (not navigated into the past).
+  const followingToday = useRef(true)
+
+  useFocusEffect(useCallback(() => {
+    if (followingToday.current && localDateString(anchor) !== localDateString()) {
+      setAnchor(new Date()) // past midnight: the period effect refetches
+    } else {
+      reload()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reload]))
 
   const { from, to } = periodRange(period, anchor)
   const today = localDateString()
   const atCurrent = from <= today && today <= to
-  const rows = visibleDays(days)
+  const rows = days
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
@@ -40,7 +52,7 @@ export default function HistoryScreen() {
               <Pressable
                 key={p}
                 style={[s.segBtn, period === p && s.segActive]}
-                onPress={() => { setPeriod(p); setAnchor(new Date()) }}
+                onPress={() => { followingToday.current = true; setPeriod(p); setAnchor(new Date()) }}
                 accessibilityRole="button"
                 accessibilityState={{ selected: period === p }}
               >
@@ -51,12 +63,18 @@ export default function HistoryScreen() {
         </View>
 
         <View style={s.nav}>
-          <Pressable onPress={() => setAnchor(shiftAnchor(period, anchor, -1))} hitSlop={12} accessibilityLabel="Previous period">
+          <Pressable onPress={() => { followingToday.current = false; setAnchor(shiftAnchor(period, anchor, -1)) }} hitSlop={12} accessibilityLabel="Previous period">
             <Text style={s.chev}>‹</Text>
           </Pressable>
           <Text style={s.range}>{rangeHeader(period, from, to)}</Text>
           <Pressable
-            onPress={() => !atCurrent && setAnchor(shiftAnchor(period, anchor, 1))}
+            onPress={() => {
+              if (atCurrent) return
+              const next = shiftAnchor(period, anchor, 1)
+              const r = periodRange(period, next)
+              followingToday.current = r.from <= today && today <= r.to
+              setAnchor(next)
+            }}
             disabled={atCurrent}
             hitSlop={12}
             accessibilityLabel="Next period"

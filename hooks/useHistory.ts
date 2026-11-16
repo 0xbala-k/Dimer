@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { syncCycles } from '../lib/cycleSync'
+import { localDateString } from '../lib/date'
+import { visibleDays } from '../lib/historyFormat'
 import { groupIntoDays, periodRange, periodTotal, type Day, type Period } from '../lib/days'
 import type { FoodLog, WhoopCycleRow } from '../lib/types'
 
@@ -20,19 +22,26 @@ async function fetchLogs(fromIso: string, toIso: string): Promise<FoodLog[]> {
   return (data ?? []) as FoodLog[]
 }
 
+/** A cycle labeled outside the period can still cover its edge hours, so fetch one day either side. */
+function shiftDay(ymd: string, n: number): string {
+  const d = parseLocal(ymd)
+  return localDateString(new Date(d.getFullYear(), d.getMonth(), d.getDate() + n))
+}
+
 async function loadPeriod(period: Period, anchor: Date): Promise<Day[]> {
   const { from, to } = periodRange(period, anchor)
   const { data, error } = await supabase
     .from('whoop_cycles')
     .select('*')
-    .gte('day', from)
-    .lte('day', to)
+    .gte('day', shiftDay(from, -1))
+    .lte('day', shiftDay(to, 1))
     .order('start', { ascending: false })
   if (error) throw new Error(error.message || 'Could not load cycles')
   const cycles = (data ?? []) as WhoopCycleRow[]
   const now = new Date()
   let lo = parseLocal(from).getTime()
   let hi = parseLocal(to, true).getTime()
+  // Only cycles that touch the period widen the log window.
   for (const c of cycles) {
     lo = Math.min(lo, new Date(c.start).getTime())
     hi = Math.max(hi, c.end ? new Date(c.end).getTime() : now.getTime())
@@ -63,14 +72,18 @@ export function useHistory(period: Period, anchor: Date) {
     setLoading(false)
   }, [period, anchorKey])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    setDays([])
+    load()
+  }, [load])
 
   const refresh = useCallback(async () => {
     await syncCycles()
     await load()
   }, [load])
 
-  return { days, total: periodTotal(days), loading, error, refresh }
+  const shown = visibleDays(days)
+  return { days: shown, total: periodTotal(shown), loading, error, refresh, reload: load }
 }
 
 export function useDay(key: string) {
