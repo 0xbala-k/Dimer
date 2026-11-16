@@ -167,3 +167,14 @@ export async function fetchTodayWhoopData(): Promise<WhoopData> {
   const cycles: CycleRecord[] = res.data.records ?? []
   return summarizeCycles(cycles)
 }
+
+export async function fetchCyclesPage(
+  startIso: string,
+  nextToken?: string,
+): Promise<{ records: CycleRecord[]; next_token?: string | null }> {
+  let path = `/cycle?start=${encodeURIComponent(startIso)}&limit=25`
+  if (nextToken) path += `&nextToken=${encodeURIComponent(nextToken)}`
+  const res = await whoopGet(path)
+  if (!res.ok) throw new Error(`Whoop API error: ${res.status}`)
+  return { records: res.data?.records ?? [], next_token: res.data?.next_token ?? null }
+}
