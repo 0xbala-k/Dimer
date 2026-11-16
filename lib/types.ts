@@ -78,6 +78,8 @@ export interface WhoopData {
   burned: number
   strain: number | null
   recovery: number | null
+  cycleStart: string | null
+  day: string | null
 }
 
 export interface RestaurantResult {
