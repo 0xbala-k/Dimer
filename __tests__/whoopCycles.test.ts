@@ -42,4 +42,19 @@ describe('summarizeCycles', () => {
     expect(result.burned).toBe(0)
     expect(result.strain).toBeNull()
   })
+
+  it('returns the open cycle start and its day label', () => {
+    const result = summarizeCycles([
+      { ...ongoingToday, timezone_offset: '-07:00' },
+      completedYesterday,
+    ])
+    expect(result.cycleStart).toBe('2026-07-14T01:30:00.000Z')
+    expect(result.day).toBe('2026-07-14')
+  })
+
+  it('has null cycleStart and day for an empty collection', () => {
+    const result = summarizeCycles([])
+    expect(result.cycleStart).toBeNull()
+    expect(result.day).toBeNull()
+  })
 })

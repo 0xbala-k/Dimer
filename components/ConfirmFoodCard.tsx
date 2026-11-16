@@ -88,22 +88,6 @@ export function ConfirmFoodCard({ result, inputMethod, onSaved, onRetake }: Prop
       })
       if (error) throw error
 
-      // Upsert daily_summaries consumed total
-      const { data: existing } = await supabase
-        .from('daily_summaries')
-        .select('calories_consumed')
-        .eq('date', today)
-        .maybeSingle()
-
-      const { error: summaryError } = await supabase.from('daily_summaries').upsert({
-        user_id: userId,
-        date: today,
-        calories_consumed: (existing?.calories_consumed ?? 0) + values.calories,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id,date' })
-      // The food entry is saved; a failed summary update shouldn't block that.
-      if (summaryError) console.error('[ConfirmFoodCard] daily summary update failed:', summaryError)
-
       haptics.notification(NotificationFeedbackType.Success)
       onSaved()
     } catch (e) {

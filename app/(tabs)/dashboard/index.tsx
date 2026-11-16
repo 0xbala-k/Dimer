@@ -10,15 +10,25 @@ import { WhoopBadge } from '../../../components/WhoopBadge'
 import { GlassCard } from '../../../components/GlassCard'
 import { AddFoodSheet } from '../../../components/AddFoodSheet'
 import { useWhoopData } from '../../../hooks/useWhoopData'
+import { useTodayStart } from '../../../hooks/useTodayStart'
 import { useFoodLog } from '../../../hooks/useFoodLog'
 import { useDeficit } from '../../../hooks/useDeficit'
 import type { FoodLog } from '../../../lib/types'
 import { colors, fonts, spacing } from '../../../lib/theme'
 
+/** Parse YYYY-MM-DD as a local date (new Date('YYYY-MM-DD') would be UTC). */
+function parseLabel(label: string | null): Date {
+  const m = label ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(label) : null
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date()
+}
+
 export default function DashboardScreen() {
   const sheetRef = useRef<BottomSheet>(null)
-  const { data: whoopData, loading: whoopLoading, error: whoopError, needsReconnect, refetch: refetchWhoop } = useWhoopData()
-  const { logs, totalCalories, error: logError, refetch: refetchLogs } = useFoodLog()
+  const whoop = useWhoopData()
+  const { data: whoopData, loading: whoopLoading, error: whoopError, needsReconnect, refetch: refetchWhoop } = whoop
+  const { dayStart, label } = useTodayStart(whoop)
+  const { logs, totalCalories, error: logError, refetch: refetchLogs } = useFoodLog(dayStart)
+  const headerDate = parseLabel(label)
   const deficit = useDeficit(whoopData?.burned ?? 0, logs)
 
   const burned = whoopData?.burned ?? 0
@@ -31,8 +41,8 @@ export default function DashboardScreen() {
       <ScrollView style={s.scroll} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
         <View style={s.header}>
           <View>
-            <Text style={s.day}>{new Date().toLocaleDateString('en-US', { weekday: 'long' })}</Text>
-            <Text style={s.date}>{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase()}</Text>
+            <Text style={s.day}>{headerDate.toLocaleDateString('en-US', { weekday: 'long' })}</Text>
+            <Text style={s.date}>{headerDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase()}</Text>
           </View>
           <WhoopBadge strain={whoopData?.strain ?? null} recovery={whoopData?.recovery ?? null} />
         </View>

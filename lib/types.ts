@@ -47,6 +47,19 @@ export interface DailySummary {
   updated_at: string
 }
 
+export interface WhoopCycleRow {
+  user_id: string
+  cycle_id: number
+  start: string
+  end: string | null
+  tz_offset: string | null
+  day: string
+  score_state: 'SCORED' | 'PENDING_SCORE' | 'UNSCORABLE'
+  burned: number | null
+  strain: number | null
+  updated_at?: string
+}
+
 export interface MacroTotals {
   protein: number
   carbs: number
@@ -65,6 +78,8 @@ export interface WhoopData {
   burned: number
   strain: number | null
   recovery: number | null
+  cycleStart: string | null
+  day: string | null
 }
 
 export interface RestaurantResult {

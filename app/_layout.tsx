@@ -2,6 +2,7 @@ import 'react-native-url-polyfill/auto'
 import 'react-native-gesture-handler'
 import '../global.css'
 import { useEffect, useState } from 'react'
+import { AppState } from 'react-native'
 import { Stack } from 'expo-router'
 import Head from 'expo-router/head'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -17,6 +18,7 @@ import { getValidAccessToken } from '../lib/whoop'
 import { ensureSession, isWhoopLinked, linkWhoopAccount } from '../lib/auth'
 import { colors } from '../lib/theme'
 import { withTimeout } from '../lib/date'
+import { syncCycles } from '../lib/cycleSync'
 import { View } from 'react-native'
 
 WebBrowser.maybeCompleteAuthSession()
@@ -52,7 +54,17 @@ export default function RootLayout() {
     // render anyway so screens can show an error instead of a blank page.
     withTimeout(bootstrap(), 12_000, 'bootstrap_timeout')
       .catch((e) => console.error('[bootstrap] failed:', e))
-      .finally(() => setAuthChecked(true))
+      .finally(() => {
+        setAuthChecked(true)
+        void syncCycles()
+      })
+  }, [])
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (status) => {
+      if (status === 'active') void syncCycles()
+    })
+    return () => sub.remove()
   }, [])
 
   useEffect(() => {

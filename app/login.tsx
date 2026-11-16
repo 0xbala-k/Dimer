@@ -8,6 +8,7 @@ import Svg, { Circle, Path, Defs, LinearGradient, Stop } from 'react-native-svg'
 import { colors, fonts } from '../lib/theme'
 import { DISCOVERY, exchangeWhoopCode } from '../lib/whoop'
 import { linkWhoopAccount, LinkWhoopError } from '../lib/auth'
+import { syncCycles } from '../lib/cycleSync'
 
 const CLIENT_ID = process.env.EXPO_PUBLIC_WHOOP_CLIENT_ID!
 const WHOOP_SCOPES = ['offline', 'read:cycles', 'read:body_measurement', 'read:profile']
@@ -72,6 +73,7 @@ export default function LoginScreen() {
         )
         return
       }
+      void syncCycles()
       router.replace('/dashboard')
     } catch (e) {
       console.log('[Whoop] token exchange error:', e)

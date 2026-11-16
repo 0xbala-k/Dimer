@@ -1,26 +1,21 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import type { FoodLog } from '../lib/types'
-import { localDateString } from '../lib/date'
-
-function todayDate() {
-  return localDateString()
-}
-
 let channelCounter = 0
 
-export function useFoodLog() {
+export function useFoodLog(dayStart: string | null) {
   const [logs, setLogs] = useState<FoodLog[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const channelName = useRef(`food_logs_today_${++channelCounter}`).current
 
   const fetchLogs = useCallback(async () => {
+    if (!dayStart) return
     setLoading(true)
     const { data, error } = await supabase
       .from('food_logs')
       .select('*')
-      .eq('date', todayDate())
+      .gte('logged_at', dayStart)
       .order('logged_at', { ascending: false })
     if (error) {
       console.error('[useFoodLog] fetch failed:', error)
@@ -30,9 +25,9 @@ export function useFoodLog() {
       if (data) setLogs(data as FoodLog[])
     }
     setLoading(false)
-  }, [])
+  }, [dayStart])
 
-  // Initial fetch
+  // Fetch on mount and whenever the day boundary changes
   useEffect(() => {
     fetchLogs()
   }, [fetchLogs])
@@ -48,7 +43,6 @@ export function useFoodLog() {
         event: '*',
         schema: 'public',
         table: 'food_logs',
-        filter: `date=eq.${todayDate()}`,
       }, () => { fetchRef.current() })
       .subscribe()
 

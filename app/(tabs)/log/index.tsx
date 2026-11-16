@@ -1,11 +1,15 @@
 import { View, Text, ScrollView, RefreshControl, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useWhoopData } from '../../../hooks/useWhoopData'
+import { useTodayStart } from '../../../hooks/useTodayStart'
 import { useFoodLog } from '../../../hooks/useFoodLog'
 import { FoodLogItem } from '../../../components/FoodLogItem'
 import { colors, fonts, spacing } from '../../../lib/theme'
 
 export default function LogScreen() {
-  const { logs, loading, totalCalories, refetch, deleteLog } = useFoodLog()
+  const whoop = useWhoopData()
+  const { dayStart } = useTodayStart(whoop)
+  const { logs, loading, totalCalories, refetch, deleteLog } = useFoodLog(dayStart)
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
