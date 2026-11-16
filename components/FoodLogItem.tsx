@@ -15,7 +15,7 @@ const SOURCE_COLORS: Record<FoodLog['source'], string> = {
 
 interface Props {
   log: FoodLog
-  onDelete: (id: string) => void
+  onDelete?: (id: string) => void
 }
 
 export function FoodLogItem({ log, onDelete }: Props) {
@@ -29,7 +29,7 @@ export function FoodLogItem({ log, onDelete }: Props) {
         style: 'destructive',
         onPress: () => {
           haptics.impact(ImpactFeedbackStyle.Medium)
-          onDelete(log.id)
+          onDelete?.(log.id)
         },
       },
     ])
@@ -46,8 +46,7 @@ export function FoodLogItem({ log, onDelete }: Props) {
   const accentColor = SOURCE_COLORS[log.source]
   const time = new Date(log.logged_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
 
-  return (
-    <Swipeable ref={swipeRef} renderRightActions={renderRightActions} overshootRight={false}>
+  const row = (
       <View style={s.container}>
         <View style={[s.accent, { backgroundColor: accentColor }]} />
         <View style={[s.iconWrap, { backgroundColor: `${accentColor}15` }]}>
@@ -61,6 +60,12 @@ export function FoodLogItem({ log, onDelete }: Props) {
         </View>
         <Text style={[s.kcal, { color: accentColor }]}>{log.calories}</Text>
       </View>
+  )
+
+  if (!onDelete) return row
+  return (
+    <Swipeable ref={swipeRef} renderRightActions={renderRightActions} overshootRight={false}>
+      {row}
     </Swipeable>
   )
 }

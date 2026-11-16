@@ -65,6 +65,7 @@ export default function TabsLayout() {
         name="history/index"
         options={{ title: 'History', tabBarIcon: ({ color }) => <HistoryIcon color={color} /> }}
       />
+      <Tabs.Screen name="history/[day]" options={{ href: null }} />
     </Tabs>
   )
 }
