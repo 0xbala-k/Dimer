@@ -41,6 +41,14 @@ export async function fetchAllCyclesSince(
   return out
 }
 
+const listeners = new Set<() => void>()
+
+/** Subscribe to successful cycle syncs (fired after the upsert). Returns an unsubscribe. */
+export function onCyclesSynced(cb: () => void): () => void {
+  listeners.add(cb)
+  return () => { listeners.delete(cb) }
+}
+
 let inFlight: Promise<void> | null = null
 
 async function run(): Promise<void> {
@@ -61,6 +69,7 @@ async function run(): Promise<void> {
     if (rows.length === 0) return
     const { error } = await supabase.from('whoop_cycles').upsert(rows, { onConflict: 'user_id,cycle_id' })
     if (error) throw error
+    listeners.forEach((cb) => cb())
   } catch (e) {
     console.error('[cycleSync] failed:', e)
   }
