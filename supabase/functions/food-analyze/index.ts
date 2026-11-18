@@ -1,5 +1,6 @@
 // supabase/functions/food-analyze/index.ts
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { parseAnalyzeInput, buildPhotoContent } from './logic.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -33,9 +34,8 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
-    const { mode, data, description } = await req.json() as { mode: 'photo' | 'text', data: string, description?: string }
-    if (!['photo', 'text'].includes(mode) || typeof data !== 'string'
-      || (description !== undefined && typeof description !== 'string')) {
+    const input = parseAnalyzeInput(await req.json())
+    if (!input.ok) {
       return new Response(JSON.stringify({ error: 'invalid_input' }), {
         status: 400,
         headers: { ...CORS, 'Content-Type': 'application/json' },
@@ -44,18 +44,14 @@ serve(async (req) => {
 
     const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY') ?? ''
 
-    // hint is user-controlled text — keep it inside the user turn, never the system prompt
-    const hint = description?.trim().slice(0, 500)
-    const photoPrompt = hint
-      ? `Analyze this food photo and return the JSON. The user describes it as: "${hint}". Use this to guide identification and portion estimates, but trust the photo for what is visible.`
-      : 'Analyze this food photo and return the JSON.'
-
-    const messages = mode === 'photo'
-      ? [{ role: 'user', content: [
-          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data } },
-          { type: 'text', text: photoPrompt },
-        ]}]
-      : [{ role: 'user', content: `Analyze this food and return JSON: ${data}` }]
+    // description is user-controlled text: buildPhotoContent keeps it inside
+    // the user turn, never the system prompt.
+    const messages = input.mode === 'photo'
+      ? [{ role: 'user', content: buildPhotoContent(input.images, input.description) }]
+      : [{ role: 'user', content: `Analyze this food and return JSON: ${input.text}` }]
+    // A multi-image meal (e.g. a bowl with several modifiers) has a longer
+    // ingredient list; give it room so the JSON isn't cut off.
+    const maxTokens = input.images.length > 1 ? 1024 : 512
 
     const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -66,7 +62,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 512,
+        max_tokens: maxTokens,
         system: SYSTEM,
         messages,
       }),
@@ -88,7 +84,7 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
-          max_tokens: 512,
+          max_tokens: maxTokens,
           system: SYSTEM,
           messages: [...messages, { role: 'assistant', content: '{' }],
         }),
