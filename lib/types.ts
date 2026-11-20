@@ -92,3 +92,18 @@ export interface RestaurantResult {
   fats: number
   fiber: number
 }
+
+export interface SavedMeal {
+  id: string
+  user_id: string
+  created_at: string
+  updated_at: string
+  source: FoodLog['source'] | null
+  name: string
+  calories: number
+  protein: number
+  carbs: number
+  fats: number
+  fiber: number
+  raw_response?: Record<string, unknown> | null
+}
