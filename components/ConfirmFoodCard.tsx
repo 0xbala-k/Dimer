@@ -10,6 +10,7 @@ import type { FoodResult } from '../lib/types'
 import { localDateString } from '../lib/date'
 import { roundNutrition } from '../lib/nutrition'
 import { saveErrorMessage } from '../lib/saveError'
+import type { MealValues } from '../lib/savedMeals'
 
 // Exported for unit testing
 export function scaleByServing(
@@ -33,6 +34,7 @@ interface Props {
   inputMethod: 'photo' | 'text' | 'restaurant' | 'barcode'
   onSaved: () => void
   onRetake: () => void
+  onSaveMeal?: (values: MealValues, source: Props['inputMethod'], raw: Record<string, unknown>) => Promise<void>
 }
 
 interface EditableFields {
@@ -44,7 +46,7 @@ interface EditableFields {
   fiber: number
 }
 
-export function ConfirmFoodCard({ result, inputMethod, onSaved, onRetake }: Props) {
+export function ConfirmFoodCard({ result, inputMethod, onSaved, onRetake, onSaveMeal }: Props) {
   const DEFAULT_GRAMS = 100
   const [servingGrams, setServingGrams] = useState(DEFAULT_GRAMS)
   // Rounded up front so the card shows e.g. 0.8 g rather than 0.8050965834116 g.
@@ -59,6 +61,25 @@ export function ConfirmFoodCard({ result, inputMethod, onSaved, onRetake }: Prop
     }),
   }))
   const [saving, setSaving] = useState(false)
+  const [mealState, setMealState] = useState<'idle' | 'saving' | 'saved'>('idle')
+
+  async function handleSaveMeal() {
+    if (!onSaveMeal) return
+    setMealState('saving')
+    try {
+      await onSaveMeal(
+        { ...fields, name: fields.name.trim() || result.name },
+        inputMethod,
+        result as unknown as Record<string, unknown>,
+      )
+      haptics.notification(NotificationFeedbackType.Success)
+      setMealState('saved')
+    } catch (e) {
+      console.error('[ConfirmFoodCard] save meal failed:', e)
+      showAlert('Failed to save meal', saveErrorMessage(e))
+      setMealState('idle')
+    }
+  }
 
   function changeServing(delta: number) {
     const next = Math.max(10, servingGrams + delta)
@@ -187,6 +208,18 @@ export function ConfirmFoodCard({ result, inputMethod, onSaved, onRetake }: Prop
           <Text style={s.saveText}>{saving ? 'Saving…' : 'Save to Log →'}</Text>
         </Pressable>
       </View>
+      {onSaveMeal && (
+        <Pressable
+          style={({ pressed }) => [s.saveMealBtn, pressed && { opacity: 0.7 }, mealState !== 'idle' && { opacity: 0.6 }]}
+          onPress={handleSaveMeal}
+          disabled={mealState !== 'idle'}
+          accessibilityLabel="Save to my saved meals"
+        >
+          <Text style={s.saveMealText}>
+            {mealState === 'saving' ? 'Saving…' : mealState === 'saved' ? 'Saved to Meals ✓' : '☆ Save Meal'}
+          </Text>
+        </Pressable>
+      )}
     </View>
   )
 }
@@ -216,5 +249,7 @@ const s = StyleSheet.create({
   retakeBtn: { flex: 0.6, padding: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.cardBorder, borderRadius: radii.md, alignItems: 'center' },
   retakeText: { fontFamily: fonts.labelSemiBold, fontSize: 11, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 1 },
   saveBtn: { flex: 1.4, padding: 13, backgroundColor: colors.primary, borderRadius: radii.md, alignItems: 'center', shadowColor: colors.primary, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 8 },
+  saveMealBtn: { padding: 12, borderWidth: 1, borderColor: `${colors.primary}30`, backgroundColor: `${colors.primary}08`, borderRadius: radii.md, alignItems: 'center' },
+  saveMealText: { fontFamily: fonts.labelSemiBold, fontSize: 11, color: colors.primary, textTransform: 'uppercase', letterSpacing: 1 },
   saveText: { fontFamily: fonts.labelSemiBold, fontSize: 11, color: colors.bg, textTransform: 'uppercase', letterSpacing: 1 },
 })

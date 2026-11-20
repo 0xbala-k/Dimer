@@ -1,4 +1,4 @@
-import React, { forwardRef, useState, useCallback } from 'react'
+import React, { forwardRef, useState, useCallback, useEffect } from 'react'
 import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { haptics } from '../lib/haptics'
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet'
@@ -9,6 +9,8 @@ import { RestaurantSearch } from './RestaurantSearch'
 import { BarcodeInput } from './BarcodeInput'
 import type { FoodResult } from '../lib/types'
 import { ConfirmFoodCard } from './ConfirmFoodCard'
+import { SavedMealsList } from './SavedMealsList'
+import { useSavedMeals } from '../hooks/useSavedMeals'
 
 type Tab = 'photo' | 'text' | 'restaurant' | 'barcode'
 
@@ -25,6 +27,13 @@ export const AddFoodSheet = forwardRef<BottomSheet>((_, ref) => {
   // Tracks whether the sheet is showing; the sheet stays mounted while closed,
   // so the web barcode scanner uses this to stop the camera on close.
   const [sheetOpen, setSheetOpen] = useState(false)
+  const savedMeals = useSavedMeals()
+  const refetchSavedMeals = savedMeals.refetch
+
+  // Refresh saved meals each time the sheet opens.
+  useEffect(() => {
+    if (sheetOpen) refetchSavedMeals()
+  }, [sheetOpen, refetchSavedMeals])
 
   const handleResult = useCallback((result: FoodResult) => {
     setPendingResult(result)
@@ -59,9 +68,20 @@ export const AddFoodSheet = forwardRef<BottomSheet>((_, ref) => {
             inputMethod={activeTab}
             onSaved={handleSaved}
             onRetake={() => setPendingResult(null)}
+            onSaveMeal={savedMeals.saveMeal}
           />
         ) : (
           <>
+            <SavedMealsList
+              meals={savedMeals.meals}
+              onLog={async (meal) => {
+                await savedMeals.logMeal(meal)
+                handleSaved()
+              }}
+              onUpdate={savedMeals.updateMeal}
+              onDelete={savedMeals.deleteMeal}
+            />
+
             {/* Tab bar */}
             <View style={s.tabBar}>
               {TABS.map((tab) => (
